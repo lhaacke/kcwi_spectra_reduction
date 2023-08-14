@@ -103,13 +103,14 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
         templates[:, j] = sspNew/np.median(sspNew[sspNew > 0])  # Normalizes templates
 
     ############################### MASK PIXELS ############################################
-    if cut_spec:
-        print('spectrum cut')
-        n_pix_left = int((h1['WAVGOOD0']-h1['WAVALL0']) / h1['CDELT1'] + 5)
-        n_pix_right = int((h1['WAVALL1']-h1['WAVGOOD1']) / h1['CDELT1'] + 5)
+    if mask_line_regions:
+        print('masked except for h_beta')
         mask = np.full_like(galaxy, 1)
-        mask[:n_pix_left] = 0
-        mask[(len(galaxy)-n_pix_right):] = 0
+        h_beta = 4861.35
+        # h_beta = h_beta * (1 + redshift)
+        c = ((ln_lam1 < np.log(h_beta - 10)) | (ln_lam1 > np.log(h_beta + 10)))
+        mask_indices = np.where(c)
+        mask[mask_indices] = 0
         goodPixels = np.flatnonzero(mask)
     elif bootstrap:
         print('making masks for bootstrap error')
@@ -190,6 +191,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
             vtot = vcosm + vpec       # I add the two velocities before computing z
             print('vcosm: {}, vpec: {}, vtot: {}'.format(vcosm, vpec, vtot))
 
+            # The updated best-fitting redshift is given by the following
+            # lines (using equation 8 of Cappellari 2017, MNRAS)
             redshift_best = np.exp(vtot/c) - 1          # eq.(8) Cappellari (2017)
             errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
             redshift_err = np.exp(vtot/c)*errors[0]/c   # Error propagation
@@ -200,37 +203,6 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
             i += 1
         res[i] = (99, 99, np.average(res['v'][:-1]), np.average(res['v_err'][:-1]), np.average(res['z'][:-1]), np.average(res['z_err'][:-1]),
                     np.average(res['sig'][:-1]), np.average(res['sig_err'][:-1]), np.average(res['sn_median'][:-1]), np.average(res['sn_average'][:-1]))
-    else:
-        pp = ppxf(templates, galaxy, noise, velscale, start, goodpixels=goodPixels,
-                  plot=False, moments=2, degree=10, mdegree=6,
-                  lam=np.exp(ln_lam1), lam_temp=np.exp(ln_lam2),
-                  velscale_ratio=velscale_ratio)
-
-        # The updated best-fitting redshift is given by the following
-        # lines (using equation 8 of Cappellari 2017, MNRAS)
-        vcosm = c*np.log(1 + redshift_0)            # This is the initial redshift estimate
-        print(vcosm)
-        vpec = pp.sol[0]                            # This is the fitted residual velocity
-        print(vpec)
-        vtot = vcosm + vpec                         # I add the two velocities before computing z
-        print(vtot)
-        if shift_spec:
-            redshift_best = np.exp(vtot/c) - 1          # eq.(8) Cappellari (2017)
-            errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
-            redshift_err = np.exp(vtot/c)*errors[0]/c   # Error propagation
-        else:
-            redshift_best = np.exp(vpec/c) - 1          # eq.(8) Cappellari (2017)
-            errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
-            redshift_err = np.exp(vpec/c)*errors[0]/c   # Error propagation
-        sn = np.median(2*np.sqrt(((pp.bestfit-pp.apoly)/(pp.galaxy - pp.bestfit))**2))
-
-        print("Formal errors:")
-        print("     dV    dsigma   dh3      dh4")
-        print("".join("%8.2g" % f for f in errors))
-        print('Elapsed time in pPXF: %.2f s' % (clock() - t))
-        print(f"Best-fitting redshift z = {redshift_best:#.7f} "
-            f"+/- {redshift_err:#.2g}")
-        print(sn)
 
     if fit:
         with open(save_as, 'a') as f:
