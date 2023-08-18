@@ -15,8 +15,8 @@ def hdu_wavelength_correction(file_location, wavelengths=(), save_location=None,
     owrite: whether to overwrite the 
     '''
     with fits.open(file_location, 'update') as hdu:
-        hdu[0].header['WAVALL0'] = corrs[key]['wavall'][0]
-        hdu[0].header['WAVALL1'] = corrs[key]['wavall'][1]
+        hdu[0].header['WAVALL0'] = wavelengths[0]
+        hdu[0].header['WAVALL1'] = wavelengths[1]
     if save_location:
         # tba: saving in different location than original
         i = 0
