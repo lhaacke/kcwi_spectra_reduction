@@ -7,9 +7,26 @@ import numpy as np
 from astropy.io import fits
 
 
-def hdu_wavelength_corection(file_location, save_location, sfxs, sfxs_fixed, corrs):
+def hdu_wavelength_correction(file_location, wavelengths=(), save_location=None, owrite=True):
+    '''
+    file_location: location of the file with header to be edited
+    save_location: location where to save file with edited header, this can be the same file as file_location if owrite=True
+    wavelengths: the wavelengths that should be in WAVALL0 and WAVALL1 in format (WAVALL0, WAVALL1) or other iterable
+    owrite: whether to overwrite the 
+    '''
+    with fits.open(file_location, 'update') as hdu:
+        hdu[0].header['WAVALL0'] = corrs[key]['wavall'][0]
+        hdu[0].header['WAVALL1'] = corrs[key]['wavall'][1]
+    if save_location:
+        # tba: saving in different location than original
+        i = 0
+    return 0
+
+
+def hdu_wavelength_correction_dict(file_location, save_location, sfxs, sfxs_fixed, corrs, owrite=True):
     '''
     corrs: dictionary with header data in the running part of the code
+    # this needs some adjustment to work without the dictionary structure
     '''
     for key in corrs.keys():
         path = ''.join([file_location, '/', key, sfxs])
@@ -17,7 +34,7 @@ def hdu_wavelength_corection(file_location, save_location, sfxs, sfxs_fixed, cor
         with fits.open(path) as hdu: # get data from cube
             data = hdu[0].data
         newfile = fits.PrimaryHDU(data, hdu[0].header) # write to new fits file
-        newfile.writeto(save_as, overwrite=True)
+        newfile.writeto(save_as, overwrite=owrite)
         print(corrs.keys())
         with fits.open(save_as, 'update') as hdu:
             hdu[0].header['WAVALL0'] = corrs[key]['wavall'][0]
