@@ -96,6 +96,7 @@ class manipulate_icubes:
 
         return 0
 
+
     def compare_central_wavelengths(self, file_list):
         '''
         checks if all the central wavelengths are the same
@@ -119,47 +120,52 @@ class manipulate_icubes:
         return 0
 
 
-def hdu_wavelength_correction_dict(file_location, save_location, sfxs, sfxs_fixed, corrs, owrite=True):
-    '''
-    corrs: dictionary with header data in the running part of the code
-    # this needs some adjustment to work without the dictionary structure
-    '''
-    for key in corrs.keys():
-        path = ''.join([file_location, '/', key, sfxs])
-        save_as = ''.join([save_location, '/', key, sfxs_fixed])
-        with fits.open(path) as hdu: # get data from cube
-            data = hdu[0].data
-        newfile = fits.PrimaryHDU(data, hdu[0].header) # write to new fits file
-        newfile.writeto(save_as, overwrite=owrite)
-        print(corrs.keys())
-        with fits.open(save_as, 'update') as hdu:
-            hdu[0].header['WAVALL0'] = corrs[key]['wavall'][0]
-            hdu[0].header['WAVALL1'] = corrs[key]['wavall'][1]
-            hdu[0].header['WAVGOOD0'] = corrs[key]['wavgood'][0]
-            hdu[0].header['WAVGOOD1'] = corrs[key]['wavgood'][1]
-    return 0
-
-
-
+    def wcs_correction(self):
+        '''
+        '''
+        # check if wcs_corrected path exists or not
+        if not os.path.exists(self.wcs_corrected_path):
+            os.mkdir(self.wcs_corrected_path)
             
+        # correct the wcs according to the values in self.cube_dict   
+        cut_suff = '/*gradient_corrected.fits'
+        key_len = 14
+        cubes = glob.glob(''.join([self.gradient_corrected_path, cut_suff]))
+        for cube in cubes:
+            key = cube[-(len(cut_suff) + key_len - 1):-(len(cut_suff)-1)]
+            with fits.open(cube) as hdu:
+                data = hdu[0].data
+                data_header = hdu[0].header
+                data_med = np.median(data, axis=1)
+                var = hdu[1].data
+                var_header = hdu[1].header
+            
+            # change the header values in data cube to correct wcs reference
+            data_header['CRPIX1'] = self.cube_dict[key]['xpix']
+            data_header['CRPIX2'] = self.cube_dict[key]['ypix']
+            data_header['CRVAL1'] = self.cube_dict[key]['xval']
+            data_header['CRVAL2'] = self.cube_dict[key]['yval']
+            
+            # add necessary keywords to variance cube to 'add' a wcs
+            var_header['CRPIX1'] = self.cube_dict[key]['xpix']
+            var_header['CRPIX2'] = self.cube_dict[key]['ypix']
+            var_header['CRPIX3'] = data_header['CRPIX3']
+            var_header['CRVAL1'] = self.cube_dict[key]['xval']
+            var_header['CRVAL2'] = self.cube_dict[key]['yval']
+            var_header['CRVAL3'] = data_header['CRVAL3']
+            #!!!!!! the ones below need to be adjusted to work with the rebinned cubes !!!!!!!!!!!!!
+#             var_header['CRDELT1'] = data_header['CRDELT1']
+#             var_header['CRDELT2'] = data_header['CRDELT2']
+#             var_header['CRDELT3'] = data_header['CRDELT3']
+            var_header['WCSDIM'] = data_header['WCSDIM']
+            var_header['WCSNAME'] = data_header['WCSNAME']
+            var_header['RADESYS'] = data_header['RADESYS']
+        
+                
+        # save cubes to new directory
+        wcs_cube_hdu = fits.PrimaryHDU(data, data_header)
+        wcs_cube_vdu = fits.ImageHDU(var, var_header)
+        wcs_cube_hdul = fits.HDUList([wcs_cube_hdu, wcs_cube_vdu])
+        wcs_cube_hdul.writeto(''.join([self.wcs_corrected_path, '/', key, '_wcs_corrected.fits']), overwrite=True)
 
-def wcs_correction(file_location, save_location, sfxs, sfxs_wcs, corrs):
-    '''
-    file_location: path to where the kcwi cubes are saved
-    sfxs: suffixes apart from kbyymmdd_000xx
-    corrs: dictionary of files and cooresponding ra/dec corrections
-    '''
-    for key in corrs.keys():
-        path = ''.join([file_location, '/', key, sfxs])
-        save_as = ''.join([save_location, '/', key, sfxs_wcs])
-        with fits.open(path) as hdu: # get data from cube
-            data = hdu[0].data
-        newfile = fits.PrimaryHDU(data, hdu[0].header) # write to new fits file
-        newfile.writeto(save_as, overwrite=True)
-        with fits.open(save_as, 'update') as hdu:
-            hdu[0].header['CRPIX1'] = corrs[key]['xpix']
-            hdu[0].header['CRPIX2'] = corrs[key]['ypix']
-            hdu[0].header['CRVAL1'] = corrs[key]['xval']
-            hdu[0].header['CRVAL2'] = corrs[key]['yval']
-    return 0
-
+        return 0
