@@ -2,9 +2,57 @@
 Lydia Haacke
 05/2023
 '''
-
+import glob
+import os
 import numpy as np
 from astropy.io import fits
+
+
+def cut_cubes(cube_path, cube_dict):
+    '''
+    cube_path: path to cubes that need to be cut
+    cube_dict: dictionary with info on cubes (pixels to be included)
+    '''
+    cut_cubes_path = ''.join([cube_path, 'icubes_cut'])
+    # check if the directory for the cut cubes is there
+    # make cut cube directory if it is not
+    if not os.path.exists(cut_cubes_path):
+        os.mkdir(cut_cubes_path)
+        
+    # cut the cubes and save the cut cube into the cut cube directory 
+    cubes = glob.glob(''.join([cube_path, '*icubes.fits']))
+    for cube in cubes:
+        key = cube[-26:-12]
+        with fits.open(cube) as hdu:
+            hdu.info()
+            data = hdu[0].data
+            data_header = hdu[0].header
+            var = hdu[2].data
+            var_header = hdu[2].header
+            
+            # cut data and variance cube
+            cut_cube = data[cube_dict[key]['z_border'][0]-1:cube_dict[key]['z_border'][1],
+                            cube_dict[key]['y_border'][0]-1:cube_dict[key]['y_border'][1],
+                            cube_dict[key]['x_border'][0]-1:cube_dict[key]['x_border'][1]]
+            cut_cube_variance = var[cube_dict[key]['z_border'][0]-1:cube_dict[key]['z_border'][1],
+                                    cube_dict[key]['y_border'][0]-1:cube_dict[key]['y_border'][1],
+                                    cube_dict[key]['x_border'][0]-1:cube_dict[key]['x_border'][1]]
+            
+            # correct header keywords to avoid confusing qfits view
+            data_header['NAXIS1'] = data.shape[0]
+            data_header['NAXIS2'] = data.shape[1]
+            data_header['NAXIS3'] = data.shape[2]
+            var_header['NAXIS1'] = var.shape[0]
+            var_header['NAXIS2'] = var.shape[1]
+            var_header['NAXIS3'] = var.shape[2]
+            
+            # save cubes to new directory
+            cut_cube_hdu = fits.PrimaryHDU(cut_cube, data_header)
+            cut_cube_vdu = fits.ImageHDU(cut_cube_variance, var_header)
+            cut_cube_hdul = fits.HDUList([cut_cube_hdu, cut_cube_vdu])
+            cut_cube_hdul.writeto(''.join([cut_cubes_path, '/', key, '_icubes_cut.fits']), overwrite=True)
+    return 0
+
 
 
 def hdu_wavelength_correction(file_location, wavelengths=(), save_location=None, owrite=True):
