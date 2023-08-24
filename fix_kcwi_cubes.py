@@ -4,6 +4,7 @@ Lydia Haacke
 '''
 import glob
 import os
+import math
 import numpy as np
 from astropy.io import fits
 
@@ -48,6 +49,8 @@ class manipulate_icubes:
                 data_header['NAXIS1'] = data.shape[0]
                 data_header['NAXIS2'] = data.shape[1]
                 data_header['NAXIS3'] = data.shape[2]
+                data_header['WAVALL0'] = math.ceil(data_header['WAVGOOD0'])
+                data_header['WAVALL1'] = math.floor(data_header['WAVGOOD1'])
                 var_header['NAXIS1'] = var.shape[0]
                 var_header['NAXIS2'] = var.shape[1]
                 var_header['NAXIS3'] = var.shape[2]
@@ -73,7 +76,7 @@ class manipulate_icubes:
         key_len = 14
         cubes = glob.glob(''.join([self.cut_cubes_path, cut_suff]))
         for cube in cubes:
-            key = cube[-(len(cut_suff) + key_len):-(len(cut_suff)-1)]
+            key = cube[-(len(cut_suff) + key_len):-(len(cut_suff) - 1)]
             with fits.open(cube) as hdu:
                 data = hdu[0].data
                 data_header = hdu[0].header
@@ -93,25 +96,27 @@ class manipulate_icubes:
 
         return 0
 
-
-    
-
-
-
-def hdu_wavelength_correction(file_location, wavelengths=(), save_location=None, owrite=True):
-    '''
-    file_location: location of the file with header to be edited
-    save_location: location where to save file with edited header, this can be the same file as file_location if owrite=True
-    wavelengths: the wavelengths that should be in WAVALL0 and WAVALL1 in format (WAVALL0, WAVALL1) or other iterable
-    owrite: whether to overwrite the 
-    '''
-    with fits.open(file_location, 'update') as hdu:
-        hdu[0].header['WAVALL0'] = wavelengths[0]
-        hdu[0].header['WAVALL1'] = wavelengths[1]
-    if save_location:
-        # tba: saving in different location than original
-        i = 0
-    return 0
+    def compare_central_wavelengths(self, file_list):
+        '''
+        checks if all the central wavelengths are the same
+        '''
+        # get the central wavelength of one cube as reference
+        with fits.open(file_list[0]) as hdu:
+            crval = hdu[0].header['CRVAL3']
+            crpix = hdu[0].header['CRPIX3']
+            print(crval)
+        # compare the central wavelengths for each file, change if slightly different
+        print(file_list)
+        for file in file_list:
+            with fits.open(file, 'update') as hdu:
+                h1 = hdu[0].header
+                if h1['CRVAL3'] == crval:
+                    continue
+                else:
+                    hdu[0].header['CRVAL3'] = crval
+                    hdu[0].header['CRPIX3'] = crpix
+                    # sys.exit('Central wavelengths do not match.')
+        return 0
 
 
 def hdu_wavelength_correction_dict(file_location, save_location, sfxs, sfxs_fixed, corrs, owrite=True):
