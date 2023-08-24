@@ -11,6 +11,7 @@ from astropy.io import fits
 class manipulate_icubes:
     def __init__(self, icubes_path, cube_dict):
         self.cube_path = icubes_path
+        self.cut_cube_path = ''.join([self.cube_path, 'icubes_cut'])
         self.cube_dict = cube_dict
 
     def cut_cubes(self):
@@ -18,14 +19,13 @@ class manipulate_icubes:
         cube_path: path to cubes that need to be cut
         cube_dict: dictionary with info on cubes (pixels to be included)
         '''
-        cut_cubes_path = ''.join([self.cube_path, 'icubes_cut'])
         # check if the directory for the cut cubes is there
         # make cut cube directory if it is not
-        if not os.path.exists(cut_cubes_path):
-            os.mkdir(cut_cubes_path)
+        if not os.path.exists(self.cut_cubes_path):
+            os.mkdir(self.cut_cubes_path)
             
         # cut the cubes and save the cut cube into the cut cube directory 
-        cubes = glob.glob(''.join([cube_path, '*icubes.fits']))
+        cubes = glob.glob(''.join([self.cube_path, '*icubes.fits']))
         for cube in cubes:
             key = cube[-26:-12]
             with fits.open(cube) as hdu:
@@ -55,26 +55,26 @@ class manipulate_icubes:
                 cut_cube_hdu = fits.PrimaryHDU(cut_cube, data_header)
                 cut_cube_vdu = fits.ImageHDU(cut_cube_variance, var_header)
                 cut_cube_hdul = fits.HDUList([cut_cube_hdu, cut_cube_vdu])
-                cut_cube_hdul.writeto(''.join([cut_cubes_path, '/', key, '_icubes_cut.fits']), overwrite=True)
+                cut_cube_hdul.writeto(''.join([self.cut_cubes_path, '/', key, '_icubes_cut.fits']), overwrite=True)
         return 0
 
 
     def gradient_correction(file_location, save_location, sfxs, sfxs_median, corrs):
-    '''
-    '''
-    for key in corrs.keys():
-        path = ''.join([file_location, '/', key, sfxs]) # path where cut icube is
-        save_as = ''.join([save_location, '/', key, sfxs_median])
-        print(save_as)
-        with fits.open(path) as hdu:
-            data = hdu[0].data
-            med = np.median(data, axis=1) # find median along second axis
-            for yind in range(hdu[0].header['NAXIS2']):
-                data[:, yind, :] = data[:, yind, :]/med # divide each column by median to remove gradient
-        newfile = fits.PrimaryHDU(data, hdu[0].header) # write to new fits file
-        newfile.writeto(save_as, overwrite=True)
+        '''
+        '''
+        for key in corrs.keys():
+            path = ''.join([file_location, '/', key, sfxs]) # path where cut icube is
+            save_as = ''.join([save_location, '/', key, sfxs_median])
+            print(save_as)
+            with fits.open(path) as hdu:
+                data = hdu[0].data
+                med = np.median(data, axis=1) # find median along second axis
+                for yind in range(hdu[0].header['NAXIS2']):
+                    data[:, yind, :] = data[:, yind, :]/med # divide each column by median to remove gradient
+            newfile = fits.PrimaryHDU(data, hdu[0].header) # write to new fits file
+            newfile.writeto(save_as, overwrite=True)
 
-    return 0
+        return 0
 
 
     
