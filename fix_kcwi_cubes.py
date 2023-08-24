@@ -12,8 +12,9 @@ from astropy.io import fits
 class manipulate_icubes:
     def __init__(self, icubes_path, cube_dict):
         self.cube_path = icubes_path
-        self.cut_cube_path = ''.join([self.cube_path, 'icubes_cut'])
+        self.cut_cubes_path = ''.join([self.cube_path, 'icubes_cut'])
         self.gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected'])
+        self.rebinned_cubes_path = ''.join([self.cube_path, 'icubes_rebinned'])
         self.cube_dict = cube_dict
 
     def cut_cubes(self):
@@ -97,27 +98,84 @@ class manipulate_icubes:
         return 0
 
 
-    def compare_central_wavelengths(self, file_list):
+    def compare_central_wavelengths(self):
         '''
         checks if all the central wavelengths are the same
         '''
+        # get all the cubes in gradient corrected folder  
+        cut_suff = '/*gradient_corrected.fits'
+        key_len = 14
+        cubes = glob.glob(''.join([self.gradient_corrected_path, cut_suff]))
+        
         # get the central wavelength of one cube as reference
-        with fits.open(file_list[0]) as hdu:
+        with fits.open(cubes[0]) as hdu:
             crval = hdu[0].header['CRVAL3']
             crpix = hdu[0].header['CRPIX3']
-            print(crval)
+        
         # compare the central wavelengths for each file, change if slightly different
-        print(file_list)
-        for file in file_list:
-            with fits.open(file, 'update') as hdu:
+        for cube in cubes:
+            key = cube[-(len(cut_suff) + key_len - 1):-(len(cut_suff)-1)]
+            with fits.open(cube, 'update') as hdu:
                 h1 = hdu[0].header
                 if h1['CRVAL3'] == crval:
                     continue
                 else:
                     hdu[0].header['CRVAL3'] = crval
                     hdu[0].header['CRPIX3'] = crpix
-                    # sys.exit('Central wavelengths do not match.')
         return 0
+
+
+    def rebin_cubes(self):
+        '''
+        '''
+        # check if the directory for the rebinned cubes is there
+        # make cut cube directory if it is not
+        if not os.path.exists(self.rebinned_cubes_path):
+            os.mkdir(self.rebinned_cubes_path)
+            
+        # Montage pre-processing
+        imlist = mImgtbl(self.gradient_corrected_path, ''.join([self.rebinned_cubes_path, '/icubes.tbl']), showCorners=True)
+        print(imlist)
+
+        # use mMakeHdr
+        hdr_temp = mMakeHdr(''.join([self.rebinned_cubes_path, '/icubes.tbl']), ''.join([self.rebinned_cubes_path '/icubes.hdr']))
+        print(hdr_temp)
+
+        # rebin cubes
+        cut_suff = '/*gradient_corrected.fits'
+        key_len = 14
+        cubes = glob.glob(''.join([self.gradient_corrected_path, cut_suff]))
+        arearatio = self.get_area_ratio(cubes[0])
+        for cube in cubes:
+            key = cube[-(len(cut_suff) + key_len - 1):-(len(cut_suff)-1)]
+            rep_cube = mProjectCube(cube,
+                                    ''.join([rebinned_cubes_path, '/', key, '_reproj.fits']),
+                                    ''.join([self.rebinned_cubes_path '/icubes.hdr']),
+                                    drizzle=1.0, energyMode=False, fluxScale=arearatio)
+            print(''.join([rebinned_cubes_path, '/', key, '_reproj.fits']))
+            print(''.join([self.rebinned_cubes_path '/icubes.hdr']))
+            print(rep_cube)
+    
+
+    def stack_cubes(self, stacked_cubes_name):
+        '''
+        stacks all rebinned cubes in self.rebinned_cubes_path
+
+        stacked_cubes_name: filename of the stacked cubes fits file (e.g. 'stacked.fits')
+        '''
+        # create image metadata table for reprojected cubes
+        im_meta = mImgtbl(self.rebinned_cubes_path,
+                        ''.join([self.rebinned_cubes_path, '/icubes-proj.tbl']), showCorners=True)
+        print(im_meta)
+        
+        # actually add reprojected cubes
+        print(''.join([path, '/reproj/', output_name, '.fits']))
+        added_cubes = mAddCube(''.join([self.rebinned_cubes_path, '/']),
+                            ''.join([self.rebinned_cubes_path, '/icubes-proj.tbl']),
+                            ''.join([self.rebinned_cubes_path, '/icubes.hdr']),
+                            ''.join([self.rebinned_cubes_path, '/', stacked_cubes_name]),
+                            shrink=True)
+        print(added_cubes)
 
 
     def wcs_correction(self):
@@ -169,3 +227,5 @@ class manipulate_icubes:
         wcs_cube_hdul.writeto(''.join([self.wcs_corrected_path, '/', key, '_wcs_corrected.fits']), overwrite=True)
 
         return 0
+
+        
