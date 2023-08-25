@@ -30,6 +30,8 @@ class manipulate_icubes:
         self.rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_4'])
         
         self.cube_dict = cube_dict
+        
+        self.reference_header = None
 
 
     def cut_cubes(self):
@@ -220,7 +222,7 @@ class manipulate_icubes:
         return 0
 
 
-    def get_area_ratio(self, file, header=False):
+    def get_area_ratio(self, file, header=True):
         '''
         calculate the area ratio of data cube pixels
         file: path to one of the fits files
@@ -244,19 +246,23 @@ class manipulate_icubes:
         hdr0: header of an original cube containing the keywords
         '''
         with fits.open(cube, 'update') as hdr1:
-                hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
-                hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
-                hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
-                hdr1[0].header['WAVGOOD1'] = hdr0['WAVGOOD1']
-                hdr1[0].header['CRVAL3'] = hdr0['CRVAL3']
-                hdr1[0].header['CRPIX3'] = hdr0['CRPIX3']
-                hdr1[0].header['CUNIT3'] = hdr0['CUNIT3']
-                hdr1[0].header['CTYPE3'] = hdr0['CTYPE3']
-                hdr1[0].header['CDELT3'] = hdr0['CD3_3']
-                hdr1[0].header['BUNIT'] = hdr0['BUNIT']
-                hdr1[0].header['WCSDIM'] = hdr0['WCSDIM']
-                hdr1[0].header['WCSNAME'] = hdr0['WCSNAME']
-                hdr1[0].header['RADESYS'] = hdr0['RADESYS']
+            print('fixing headers')
+            hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
+            hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
+            hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
+            hdr1[0].header['WAVGOOD1'] = hdr0['WAVGOOD1']
+            hdr1[0].header['CRVAL3'] = hdr0['CRVAL3']
+            hdr1[0].header['CRPIX3'] = hdr0['CRPIX3']
+            hdr1[0].header['CUNIT3'] = hdr0['CUNIT3']
+            hdr1[0].header['CTYPE3'] = hdr0['CTYPE3']
+            hdr1[0].header['CDELT3'] = hdr0['CD3_3']
+            hdr1[0].header['BUNIT'] = hdr0['BUNIT']
+            hdr1[0].header['WCSDIM'] = hdr0['WCSDIM']
+            hdr1[0].header['WCSNAME'] = hdr0['WCSNAME']
+            hdr1[0].header['RADESYS'] = hdr0['RADESYS']
+        with fits.open(cube) as hdu:
+            print(hdu[0].header['CDELT3'])
+
         return 0
 
 
@@ -370,13 +376,16 @@ class manipulate_icubes:
                                     ''.join([self.var_rebinned_path, '/icubes.hdr']),
                                     drizzle=1.0, energyMode=False, fluxScale=arearatio_var)                        
             if header:
-                self.fix_rebinned_hdr(data_cube, orig_header_data)
-                self.fix_rebinned_hdr(var_cube, orig_header_var)
+                print('about to fix headers')
+                self.fix_rebinned_hdr(''.join([self.data_rebinned_path, '/', data_key, '_reproj.fits']), orig_header_data)
+                self.fix_rebinned_hdr(''.join([self.var_rebinned_path, '/', var_key, '_reproj.fits']), orig_header_var)
 
             print(rep_cube_data)
             print(rep_cube_var)
 
         # fix the header of rebinned cubes
+
+        return 0
 
 
         # join cubes
@@ -419,9 +428,32 @@ class manipulate_icubes:
                             shrink=True)
         print(added_cubes_var)
 
+
+        # update stacked data cube hdr
+        self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]))
+        self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]))
+
         # join cubes
         # self.join_cubes(''.join([self.cube_path, 'data_', stacked_cubes_name]), ''.join([self.cube_path, 'var_', stacked_cubes_name]),
         #                 self.cube_path, stacked_cubes_name)
+
+        return 0
+
+
+    def fix_stacked_hdr(self, cube, orig_cube):
+        '''
+        add all necessary keywords to header of stacked cube
+        '''
+        with fits.open(orig_cube) as hdu:
+            hdr0 = hdu[0].header
+
+        with fits.open(cube, 'update') as hdr1:
+            hdr1[0].header['CUNIT3'] = hdr0['CUNIT3']
+            hdr1[0].header['CTYPE3'] = hdr0['CTYPE3']
+            hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
+            hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
+            hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
+            hdr1[0].header['WAVGOOD1'] = hdr0['WAVGOOD1']
 
         return 0
 
