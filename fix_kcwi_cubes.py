@@ -1,6 +1,6 @@
 '''
 Lydia Haacke
-05/2023
+08/2023
 '''
 import glob
 import os
@@ -21,13 +21,13 @@ class manipulate_icubes:
         self.var_gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected_var_2'])
         self.gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected_2'])
         
-        self.data_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_data_3'])
-        self.var_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_var_3'])
-        self.rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_3'])
+        self.data_wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_data_3'])
+        self.var_wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_var_3'])
+        self.wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_3'])
         
-        self.data_wcs_corrected_path = ''.join([self.cube_path, 'wcs_corrected_data_4'])
-        self.var_wcs_corrected_path = ''.join([self.cube_path, 'wcs_corrected_var_4'])
-        self.wcs_corrected_path = ''.join([self.cube_path, 'wcs_corrected_4'])
+        self.data_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_data_4'])
+        self.var_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_var_4'])
+        self.rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_4'])
         
         self.cube_dict = cube_dict
 
@@ -187,7 +187,7 @@ class manipulate_icubes:
         return 0
 
     
-    def join_cubes(self, data_path, var_path, joint_path, suff):
+    def join_cubes(self, data_path, var_path, joint_path, cut_suff):
         '''
         joins data and variance cube after rebinning
         takes cubes from self.data_rebinned_path and self.var_rebinned_path
@@ -198,24 +198,24 @@ class manipulate_icubes:
         
         # data and var cubes have the exact same name
         # gobble and sort both groups results in two matching list where index matches index
-        data_cubes = np.sort(glob.glob(''.join([data_path, suff])))
-        var_cubes = np.sort(glob.glob(''.join([var_path, suff])))
-        for i, cube in enumerate(data_cubes):
-            with fits.open(cube) as hdu:
+        data_cubes = np.sort(glob.glob(''.join([data_path, cut_suff])))
+        var_cubes = np.sort(glob.glob(''.join([var_path, cut_suff])))
+        for data_cube, var_cube in zip(data_cubes, var_cubes):
+            with fits.open(data_cube) as hdu:
                 data = hdu[0].data
                 data_header = hdu[0].header
-            with fits.open(var_cubes[i]) as hdu:
+            with fits.open(var_cube) as hdu:
                 var = hdu[0].data
                 var_header = hdu[0].header
         
             # find key using regex
-            key = self.get_key(cube)
+            data_key, var_key = self.get_key(data_cube), self.get_key(var_cube)
         
             # save cubes to new directory in joint format
             cube_hdu = fits.PrimaryHDU(data, data_header)
             cube_vdu = fits.ImageHDU(var, var_header)
             cube_hdul = fits.HDUList([cube_hdu, cube_vdu])
-            cube_hdul.writeto(''.join([joint_path, '/', key, '_rebinned_joint.fits']), overwrite=True)  
+            cube_hdul.writeto(''.join([joint_path, '/', data_key, '_rebinned_joint.fits']), overwrite=True)  
         
         return 0
 
@@ -260,75 +260,7 @@ class manipulate_icubes:
         return 0
 
 
-    def rebin_cubes(self, header=True):
-        '''
-        rebin the cubes from rectangular to square pixels
-
-        header: whether or not to return the header from get_area_ratio
-        '''
-        # check if the directories for rebinned cubes exist
-        # make if they don't
-        if not os.path.exists(self.data_rebinned_path):
-            os.mkdir(self.data_rebinned_path)
-        if not os.path.exists(self.var_rebinned_path):
-            os.mkdir(self.var_rebinned_path)
-            
-        # Montage pre-processing for data and var separately
-        imlist_data = mImgtbl(self.data_gradient_corrected_path, ''.join([self.data_rebinned_path, '/icubes.tbl']), showCorners=True)
-        print(''.join([self.data_rebinned_path, '/icubes.tbl']))
-        print(imlist_data)
-        imlist_var = mImgtbl(self.var_gradient_corrected_path, ''.join([self.var_rebinned_path, '/icubes.tbl']), showCorners=True)
-        print(''.join([self.var_rebinned_path, '/icubes.tbl']))
-        print(imlist_var)
-
-        # use mMakeHdr
-        hdr_temp_data = mMakeHdr(''.join([self.data_rebinned_path, '/icubes.tbl']), ''.join([self.data_rebinned_path, '/icubes.hdr']))
-        print(hdr_temp_data)
-        hdr_temp_var = mMakeHdr(''.join([self.var_rebinned_path, '/icubes.tbl']), ''.join([self.var_rebinned_path, '/icubes.hdr']))
-        print(hdr_temp_var)
-
-        # rebin cubes
-        cut_suff = '/*gradient_corrected.fits'
-        key_len = 14
-        data_cubes = np.sort(glob.glob(''.join([self.data_gradient_corrected_path, cut_suff])))
-        var_cubes = np.sort(glob.glob(''.join([self.var_gradient_corrected_path, cut_suff])))
-        
-        # get arearatio and header data
-        if header:
-            arearatio_data, orig_header_data = self.get_area_ratio(data_cubes[0], header=True)
-            arearatio_var, orig_header_var = self.get_area_ratio(var_cubes[0], header=True)
-        else:
-            arearatio_data = self.get_area_ratio(data_cubes[0])
-            arearatio_var = self.get_area_ratio(var_cubes[0])
-        for data_cube, var_cube in zip(data_cubes, var_cubes):
-            data_key, var_key = self.get_key(data_cube), self.get_key(var_cube)
-            if data_key != var_key:
-                sys.exit('Matching data cube to wrong variance cube.')
-            # reproject data cube
-            rep_cube_data = mProjectCube(data_cube,
-                                    ''.join([self.data_rebinned_path, '/', data_key, '_reproj.fits']),
-                                    ''.join([self.data_rebinned_path, '/icubes.hdr']),
-                                    drizzle=1.0, energyMode=False, fluxScale=arearatio_data)
-            # reproject variance cube
-            rep_cube_var = mProjectCube(var_cube,
-                                    ''.join([self.var_rebinned_path, '/', var_key, '_reproj.fits']),
-                                    ''.join([self.var_rebinned_path, '/icubes.hdr']),
-                                    drizzle=1.0, energyMode=False, fluxScale=arearatio_var)                        
-            if header:
-                self.fix_rebinned_hdr(data_cube, orig_header_data)
-                self.fix_rebinned_hdr(var_cube, orig_header_var)
-
-            print(rep_cube_data)
-            print(rep_cube_var)
-
-        # join cubes
-        self.join_cubes(self.data_rebinned_path, self.var_rebinned_path,
-                        self.rebinned_path, '/*reproj.fits')
-
-        # fix the header of rebinned cubes
-
-
-    def wcs_correction(self, cut_suff='/*reproj.fits'):
+    def wcs_correction(self, cut_suff='/*gradient_corrected.fits'):
         '''
         corrects the wcs system according to the pixel values in self.cube_dict
         '''
@@ -340,8 +272,8 @@ class manipulate_icubes:
             os.mkdir(self.var_wcs_corrected_path)
             
         # correct the wcs according to the values in self.cube_dict   
-        data_cubes = np.sort(glob.glob(''.join([self.data_rebinned_path, cut_suff])))
-        var_cubes = np.sort(glob.glob(''.join([self.var_rebinned_path, cut_suff])))
+        data_cubes = np.sort(glob.glob(''.join([self.data_gradient_corrected_path, cut_suff])))
+        var_cubes = np.sort(glob.glob(''.join([self.var_gradient_corrected_path, cut_suff])))
         for data_cube, var_cube in zip(data_cubes, var_cubes):
             data_key, var_key = self.get_key(data_cube), self.get_key(var_cube)
             if data_key != var_key:
@@ -385,6 +317,75 @@ class manipulate_icubes:
         return 0
 
 
+    def rebin_cubes(self, header=True, cut_suff='/*wcs_corrected.fits'):
+        '''
+        rebin the cubes from rectangular to square pixels
+
+        header: whether or not to return the header from get_area_ratio
+        '''
+        # check if the directories for rebinned cubes exist
+        # make if they don't
+        if not os.path.exists(self.data_rebinned_path):
+            os.mkdir(self.data_rebinned_path)
+        if not os.path.exists(self.var_rebinned_path):
+            os.mkdir(self.var_rebinned_path)
+            
+        # Montage pre-processing for data and var separately
+        imlist_data = mImgtbl(self.data_wcs_corrected_path, ''.join([self.data_rebinned_path, '/icubes.tbl']), showCorners=True)
+        print(''.join([self.data_rebinned_path, '/icubes.tbl']))
+        print(imlist_data)
+        imlist_var = mImgtbl(self.var_wcs_corrected_path, ''.join([self.var_rebinned_path, '/icubes.tbl']), showCorners=True)
+        print(''.join([self.var_rebinned_path, '/icubes.tbl']))
+        print(imlist_var)
+
+        # use mMakeHdr
+        hdr_temp_data = mMakeHdr(''.join([self.data_rebinned_path, '/icubes.tbl']), ''.join([self.data_rebinned_path, '/icubes.hdr']))
+        print(hdr_temp_data)
+        hdr_temp_var = mMakeHdr(''.join([self.var_rebinned_path, '/icubes.tbl']), ''.join([self.var_rebinned_path, '/icubes.hdr']))
+        print(hdr_temp_var)
+
+        # rebin cubes
+        data_cubes = np.sort(glob.glob(''.join([self.data_wcs_corrected_path, cut_suff])))
+        var_cubes = np.sort(glob.glob(''.join([self.var_wcs_corrected_path, cut_suff])))
+        
+        # get arearatio and header data
+        if header:
+            arearatio_data, orig_header_data = self.get_area_ratio(data_cubes[0], header=True)
+            arearatio_var, orig_header_var = self.get_area_ratio(var_cubes[0], header=True)
+        else:
+            arearatio_data = self.get_area_ratio(data_cubes[0])
+            arearatio_var = self.get_area_ratio(var_cubes[0])
+        for data_cube, var_cube in zip(data_cubes, var_cubes):
+            data_key, var_key = self.get_key(data_cube), self.get_key(var_cube)
+            if data_key != var_key:
+                sys.exit('Matching data cube to wrong variance cube.')
+            # reproject data cube
+            rep_cube_data = mProjectCube(data_cube,
+                                    ''.join([self.data_rebinned_path, '/', data_key, '_reproj.fits']),
+                                    ''.join([self.data_rebinned_path, '/icubes.hdr']),
+                                    drizzle=1.0, energyMode=False, fluxScale=arearatio_data)
+            # reproject variance cube
+            rep_cube_var = mProjectCube(var_cube,
+                                    ''.join([self.var_rebinned_path, '/', var_key, '_reproj.fits']),
+                                    ''.join([self.var_rebinned_path, '/icubes.hdr']),
+                                    drizzle=1.0, energyMode=False, fluxScale=arearatio_var)                        
+            if header:
+                self.fix_rebinned_hdr(data_cube, orig_header_data)
+                self.fix_rebinned_hdr(var_cube, orig_header_var)
+
+            print(rep_cube_data)
+            print(rep_cube_var)
+
+        # fix the header of rebinned cubes
+
+
+        # join cubes
+        self.join_cubes(self.data_rebinned_path, self.var_rebinned_path,
+                        self.rebinned_path, '/*reproj.fits')
+
+        return 0
+
+
     def stack_cubes(self, stacked_cubes_name):
         '''
         stacks all rebinned cubes in self.rebinned_cubes_path
@@ -392,27 +393,37 @@ class manipulate_icubes:
         stacked_cubes_name: filename of the stacked cubes fits file (e.g. 'stacked.fits')
         '''
         # create image metadata table for reprojected data cubes
-        im_meta_data = mImgtbl(self.data_wcs_corrected_path,
-                        ''.join([self.data_wcs_corrected_path, '/icubes-proj.tbl']), showCorners=True)
+        im_meta_data = mImgtbl(self.data_rebinned_path,
+                        ''.join([self.data_rebinned_path, '/icubes-proj.tbl']), showCorners=True)
         print(im_meta_data)
         # create image metadata table for reprojected variance cubes
-        im_meta_var = mImgtbl(self.var_wcs_corrected_path,
-                        ''.join([self.var_wcs_corrected_path, '/icubes-proj.tbl']), showCorners=True)
+        im_meta_var = mImgtbl(self.var_rebinned_path,
+                        ''.join([self.var_rebinned_path, '/icubes-proj.tbl']), showCorners=True)
         print(im_meta_var)
         
         # actually add reprojected data cubes
-        added_cubes_data = mAddCube(''.join([self.data_wcs_corrected_path, '/']),
-                            ''.join([self.data_wcs_corrected_path, '/icubes-proj.tbl']),
-                            ''.join([self.data_wcs_corrected_path, '/icubes.hdr']),
+        print(''.join([self.data_rebinned_path, '/']))
+        print(''.join([self.data_rebinned_path, '/icubes-proj.tbl']))
+        print(''.join([self.data_rebinned_path, '/icubes.hdr']))
+        print(''.join([self.cube_path, 'data_', stacked_cubes_name]))
+        added_cubes_data = mAddCube(''.join([self.data_rebinned_path, '/']),
+                            ''.join([self.data_rebinned_path, '/icubes-proj.tbl']),
+                            ''.join([self.data_rebinned_path, '/icubes.hdr']),
                             ''.join([self.cube_path, 'data_', stacked_cubes_name]),
                             shrink=True)
         print(added_cubes_data)
-        added_cubes_var = mAddCube(''.join([self.var_wcs_corrected_path, '/']),
-                            ''.join([self.var_wcs_corrected_path, '/icubes-proj.tbl']),
-                            ''.join([self.var_wcs_corrected_path, '/icubes.hdr']),
+        added_cubes_var = mAddCube(''.join([self.var_rebinned_path, '/']),
+                            ''.join([self.var_rebinned_path, '/icubes-proj.tbl']),
+                            ''.join([self.var_rebinned_path, '/icubes.hdr']),
                             ''.join([self.cube_path, 'var_', stacked_cubes_name]),
                             shrink=True)
         print(added_cubes_var)
+
+        # join cubes
+        # self.join_cubes(''.join([self.cube_path, 'data_', stacked_cubes_name]), ''.join([self.cube_path, 'var_', stacked_cubes_name]),
+        #                 self.cube_path, stacked_cubes_name)
+
+        return 0
 
 
     def get_key(self, cube):
