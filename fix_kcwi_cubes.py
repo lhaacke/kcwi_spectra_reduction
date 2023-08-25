@@ -7,14 +7,16 @@ import os
 import math
 import numpy as np
 from astropy.io import fits
+from MontagePy.main import *
 
 
 class manipulate_icubes:
     def __init__(self, icubes_path, cube_dict):
         self.cube_path = icubes_path
-        self.cut_cubes_path = ''.join([self.cube_path, 'icubes_cut'])
-        self.gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected'])
-        self.rebinned_cubes_path = ''.join([self.cube_path, 'icubes_rebinned'])
+        self.cut_cubes_path = ''.join([self.cube_path, 'icubes_cut_1'])
+        self.gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected_2'])
+        self.rebinned_cubes_path = ''.join([self.cube_path, 'icubes_rebinned_3'])
+        self.wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_4'])
         self.cube_dict = cube_dict
 
     def cut_cubes(self):
@@ -52,6 +54,8 @@ class manipulate_icubes:
                 data_header['NAXIS3'] = data.shape[2]
                 data_header['WAVALL0'] = math.ceil(data_header['WAVGOOD0'])
                 data_header['WAVALL1'] = math.floor(data_header['WAVGOOD1'])
+                data_header['CRPIX3'] -= self.cube_dict[key]['z_border'][0]
+                
                 var_header['NAXIS1'] = var.shape[0]
                 var_header['NAXIS2'] = var.shape[1]
                 var_header['NAXIS3'] = var.shape[2]
@@ -125,8 +129,51 @@ class manipulate_icubes:
         return 0
 
 
-    def rebin_cubes(self):
+    def get_area_ratio(self, file, header=False):
         '''
+        calculate the area ratio of data cube pixels
+        file: path to one of the fits files
+        header: whether or not to return the header of the fits file
+        '''
+        with fits.open(file) as hdu:
+            h1 = hdu[0].header
+            ratio = h1['SLSCL']/h1['PXSCL']
+        if header:
+            return ratio, h1
+        else:
+            return ratio
+
+
+    def fix_rebinned_hdr(self, cube, hdr0):
+        '''
+        add necessary keywords to stacked cubes' header
+        (heavily based on Nikki Nielsen's function)
+
+        cube: cube where keywords need to be added to the header
+        hdr0: header of an original cube containing the keywords
+        '''
+        with fits.open(cube, 'update') as hdr1:
+                hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
+                hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
+                hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
+                hdr1[0].header['WAVGOOD1'] = hdr0['WAVGOOD1']
+                hdr1[0].header['CRVAL3'] = hdr0['CRVAL3']
+                hdr1[0].header['CRPIX3'] = hdr0['CRPIX3']
+                hdr1[0].header['CUNIT3'] = hdr0['CUNIT3']
+                hdr1[0].header['CTYPE3'] = hdr0['CTYPE3']
+                hdr1[0].header['CDELT3'] = hdr0['CD3_3']
+                hdr1[0].header['BUNIT'] = hdr0['BUNIT']
+                hdr1[0].header['WCSDIM'] = hdr0['WCSDIM']
+                hdr1[0].header['WCSNAME'] = hdr0['WCSNAME']
+                hdr1[0].header['RADESYS'] = hdr0['RADESYS']
+        return 0
+
+
+    def rebin_cubes(self, header=True):
+        '''
+        rebin the cubes from rectangular to square pixels
+
+        header: whether or not to return the header from get_area_ratio
         '''
         # check if the directory for the rebinned cubes is there
         # make cut cube directory if it is not
@@ -138,23 +185,30 @@ class manipulate_icubes:
         print(imlist)
 
         # use mMakeHdr
-        hdr_temp = mMakeHdr(''.join([self.rebinned_cubes_path, '/icubes.tbl']), ''.join([self.rebinned_cubes_path '/icubes.hdr']))
+        hdr_temp = mMakeHdr(''.join([self.rebinned_cubes_path, '/icubes.tbl']), ''.join([self.rebinned_cubes_path, '/icubes.hdr']))
         print(hdr_temp)
 
         # rebin cubes
         cut_suff = '/*gradient_corrected.fits'
         key_len = 14
         cubes = glob.glob(''.join([self.gradient_corrected_path, cut_suff]))
-        arearatio = self.get_area_ratio(cubes[0])
+        if header:
+            arearatio, orig_header = self.get_area_ratio(cubes[0], header=True)
+        else:
+            arearatio = self.get_area_ratio(cubes[0])
+
         for cube in cubes:
             key = cube[-(len(cut_suff) + key_len - 1):-(len(cut_suff)-1)]
             rep_cube = mProjectCube(cube,
-                                    ''.join([rebinned_cubes_path, '/', key, '_reproj.fits']),
-                                    ''.join([self.rebinned_cubes_path '/icubes.hdr']),
+                                    ''.join([self.rebinned_cubes_path, '/', key, '_reproj.fits']),
+                                    ''.join([self.rebinned_cubes_path, '/icubes.hdr']),
                                     drizzle=1.0, energyMode=False, fluxScale=arearatio)
-            print(''.join([rebinned_cubes_path, '/', key, '_reproj.fits']))
-            print(''.join([self.rebinned_cubes_path '/icubes.hdr']))
+            if header:
+                self.fix_rebinned_hdr(cube, orig_header)
+
             print(rep_cube)
+
+        # fix the header of rebinned cubes
     
 
     def stack_cubes(self, stacked_cubes_name):
