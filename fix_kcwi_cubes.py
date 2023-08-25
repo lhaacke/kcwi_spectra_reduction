@@ -4,6 +4,7 @@ Lydia Haacke
 '''
 import glob
 import os
+import sys
 import math
 import re
 import numpy as np
@@ -22,7 +23,7 @@ class manipulate_icubes:
         
         self.data_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_data_3'])
         self.var_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_var_3'])
-        self.rebinned_joint_path = ''.join([self.cube_path, 'icubes_rebinned_3'])
+        self.rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_3'])
         
         self.data_wcs_corrected_path = ''.join([self.cube_path, 'wcs_corrected_data_4'])
         self.var_wcs_corrected_path = ''.join([self.cube_path, 'wcs_corrected_var_4'])
@@ -63,7 +64,7 @@ class manipulate_icubes:
             data_header['NAXIS1'] = data.shape[0]
             data_header['NAXIS2'] = data.shape[1]
             data_header['NAXIS3'] = data.shape[2]
-            data_header['CRPIX3'] -= self.cube_dict[key]['z_border'][0]
+            data_header['CRPIX3'] -= (self.cube_dict[key]['z_border'][0]-1)
             data_header['WAVALL0'] = math.ceil(data_header['WAVGOOD0'])
             data_header['WAVALL1'] = math.floor(data_header['WAVGOOD1'])
             
@@ -80,7 +81,7 @@ class manipulate_icubes:
         return 0
 
 
-    def compare_central_wavelengths(self):
+    def compare_central_wavelengths(self, cut_suff='/*icubes_cut.fits'):
         '''
         checks if all the central wavelengths are the same
         '''
@@ -99,13 +100,55 @@ class manipulate_icubes:
                 h1 = hdu[0].header
                 if h1['CRVAL3'] == crval:
                     continue
+                elif (h1['CRVAL3'] > (crval+1)) or (h1['CRVAL3'] < (crval-1)):
+                    sys.exit('Difference in central wavelengths too big')
                 else:
                     hdu[0].header['CRVAL3'] = crval
                     hdu[0].header['CRPIX3'] = crpix
         return 0
 
 
-    def gradient_correction(self):
+    def add_var_wcs_header(self, var_header, data_header, key):
+        '''
+        adds necessary keywords to variance cube header to 'have' a wcs and be rebinned according to it
+        
+        var_header: header of variance cube
+        data_header: header of corresponding data cube
+        key: kbyymmdd_xxxxx style name of the exposure
+        '''
+        # add necessary keywords to variance cube to 'add' a wcs
+        var_header['CRPIX1'] = self.cube_dict[key]['xpix']
+        var_header['CRPIX2'] = self.cube_dict[key]['ypix']
+        var_header['CRPIX3'] = data_header['CRPIX3']
+        var_header['CRVAL1'] = self.cube_dict[key]['xval']
+        var_header['CRVAL2'] = self.cube_dict[key]['yval']
+        var_header['CRVAL3'] = data_header['CRVAL3']
+        var_header['CUNIT1'] = data_header['CUNIT1']
+        var_header['CUNIT2'] = data_header['CUNIT2']
+        var_header['CUNIT3'] = data_header['CUNIT3']
+        var_header['CTYPE1'] = data_header['CTYPE1']
+        var_header['CTYPE2'] = data_header['CTYPE2']
+        var_header['CTYPE3'] = data_header['CTYPE3']
+        var_header['CD1_1'] = data_header['CD1_1']
+        var_header['CD2_1'] = data_header['CD2_1']
+        var_header['CD1_2'] = data_header['CD1_2']
+        var_header['CD2_2'] = data_header['CD2_2']
+        var_header['CD3_3'] = data_header['CD3_3']
+        var_header['BUNIT'] = data_header['BUNIT']
+        var_header['WCSDIM'] = data_header['WCSDIM']
+        var_header['WCSNAME'] = data_header['WCSNAME']
+        var_header['RADESYS'] = data_header['RADESYS']
+        var_header['SLSCL'] = data_header['SLSCL']
+        var_header['PXSCL'] = data_header['PXSCL']
+        var_header['WAVALL0'] = data_header['WAVALL0']
+        var_header['WAVALL1'] = data_header['WAVALL1']
+        var_header['WAVGOOD0'] = data_header['WAVGOOD0']
+        var_header['WAVGOOD1'] = data_header['WAVGOOD1']
+        
+        return var_header
+
+
+    def gradient_correction(self, cut_suff='/*icubes_cut.fits'):
         '''
         cut_cube_path: path where to find the cut icubes that need to be corrected
         '''
@@ -223,41 +266,124 @@ class manipulate_icubes:
 
         header: whether or not to return the header from get_area_ratio
         '''
-        # check if the directory for the rebinned cubes is there
-        # make cut cube directory if it is not
-        if not os.path.exists(self.rebinned_cubes_path):
-            os.mkdir(self.rebinned_cubes_path)
+        # check if the directories for rebinned cubes exist
+        # make if they don't
+        if not os.path.exists(self.data_rebinned_path):
+            os.mkdir(self.data_rebinned_path)
+        if not os.path.exists(self.var_rebinned_path):
+            os.mkdir(self.var_rebinned_path)
             
-        # Montage pre-processing
-        imlist = mImgtbl(self.gradient_corrected_path, ''.join([self.rebinned_cubes_path, '/icubes.tbl']), showCorners=True)
-        print(imlist)
+        # Montage pre-processing for data and var separately
+        imlist_data = mImgtbl(self.data_gradient_corrected_path, ''.join([self.data_rebinned_path, '/icubes.tbl']), showCorners=True)
+        print(''.join([self.data_rebinned_path, '/icubes.tbl']))
+        print(imlist_data)
+        imlist_var = mImgtbl(self.var_gradient_corrected_path, ''.join([self.var_rebinned_path, '/icubes.tbl']), showCorners=True)
+        print(''.join([self.var_rebinned_path, '/icubes.tbl']))
+        print(imlist_var)
 
         # use mMakeHdr
-        hdr_temp = mMakeHdr(''.join([self.rebinned_cubes_path, '/icubes.tbl']), ''.join([self.rebinned_cubes_path, '/icubes.hdr']))
-        print(hdr_temp)
+        hdr_temp_data = mMakeHdr(''.join([self.data_rebinned_path, '/icubes.tbl']), ''.join([self.data_rebinned_path, '/icubes.hdr']))
+        print(hdr_temp_data)
+        hdr_temp_var = mMakeHdr(''.join([self.var_rebinned_path, '/icubes.tbl']), ''.join([self.var_rebinned_path, '/icubes.hdr']))
+        print(hdr_temp_var)
 
         # rebin cubes
         cut_suff = '/*gradient_corrected.fits'
         key_len = 14
-        cubes = glob.glob(''.join([self.gradient_corrected_path, cut_suff]))
+        data_cubes = np.sort(glob.glob(''.join([self.data_gradient_corrected_path, cut_suff])))
+        var_cubes = np.sort(glob.glob(''.join([self.var_gradient_corrected_path, cut_suff])))
+        
+        # get arearatio and header data
         if header:
-            arearatio, orig_header = self.get_area_ratio(cubes[0], header=True)
+            arearatio_data, orig_header_data = self.get_area_ratio(data_cubes[0], header=True)
+            arearatio_var, orig_header_var = self.get_area_ratio(var_cubes[0], header=True)
         else:
-            arearatio = self.get_area_ratio(cubes[0])
-        for cube in cubes:
-            key = cube[-(len(cut_suff) + key_len - 1):-(len(cut_suff)-1)]
-            # reproject and fix the header of the data cube
-            rep_cube = mProjectCube(cube,
-                                    ''.join([self.rebinned_cubes_path, '/', key, '_reproj.fits']),
-                                    ''.join([self.rebinned_cubes_path, '/icubes.hdr']),
-                                    drizzle=1.0, energyMode=False, fluxScale=arearatio)
+            arearatio_data = self.get_area_ratio(data_cubes[0])
+            arearatio_var = self.get_area_ratio(var_cubes[0])
+        for data_cube, var_cube in zip(data_cubes, var_cubes):
+            data_key, var_key = self.get_key(data_cube), self.get_key(var_cube)
+            if data_key != var_key:
+                sys.exit('Matching data cube to wrong variance cube.')
+            # reproject data cube
+            rep_cube_data = mProjectCube(data_cube,
+                                    ''.join([self.data_rebinned_path, '/', data_key, '_reproj.fits']),
+                                    ''.join([self.data_rebinned_path, '/icubes.hdr']),
+                                    drizzle=1.0, energyMode=False, fluxScale=arearatio_data)
+            # reproject variance cube
+            rep_cube_var = mProjectCube(var_cube,
+                                    ''.join([self.var_rebinned_path, '/', var_key, '_reproj.fits']),
+                                    ''.join([self.var_rebinned_path, '/icubes.hdr']),
+                                    drizzle=1.0, energyMode=False, fluxScale=arearatio_var)                        
             if header:
-                self.fix_rebinned_hdr(cube, orig_header)
+                self.fix_rebinned_hdr(data_cube, orig_header_data)
+                self.fix_rebinned_hdr(var_cube, orig_header_var)
 
-            print(rep_cube)
+            print(rep_cube_data)
+            print(rep_cube_var)
+
+        # join cubes
+        self.join_cubes(self.data_rebinned_path, self.var_rebinned_path,
+                        self.rebinned_path, '/*reproj.fits')
 
         # fix the header of rebinned cubes
-    
+
+
+    def wcs_correction(self, cut_suff='/*reproj.fits'):
+        '''
+        corrects the wcs system according to the pixel values in self.cube_dict
+        '''
+        # check data, var_wcs_corrected directories exist
+        # make them if not
+        if not os.path.exists(self.data_wcs_corrected_path):
+            os.mkdir(self.data_wcs_corrected_path)
+        if not os.path.exists(self.var_wcs_corrected_path):
+            os.mkdir(self.var_wcs_corrected_path)
+            
+        # correct the wcs according to the values in self.cube_dict   
+        data_cubes = np.sort(glob.glob(''.join([self.data_rebinned_path, cut_suff])))
+        var_cubes = np.sort(glob.glob(''.join([self.var_rebinned_path, cut_suff])))
+        for data_cube, var_cube in zip(data_cubes, var_cubes):
+            data_key, var_key = self.get_key(data_cube), self.get_key(var_cube)
+            if data_key != var_key:
+                sys.exit('Keys must be the same.')
+            with fits.open(data_cube) as hdu:
+                data = hdu[0].data
+                data_header = hdu[0].header
+            with fits.open(var_cube) as hdu:
+                var = hdu[0].data
+                var_header = hdu[0].header
+            
+            # save cubes to new directory
+            wcs_cube_hdu = fits.PrimaryHDU(data, data_header)
+            wcs_cube_vdu = fits.PrimaryHDU(var, var_header)
+            wcs_cube_hdu.writeto(''.join([self.data_wcs_corrected_path, '/', data_key, '_wcs_corrected.fits']), overwrite=True)
+            wcs_cube_vdu.writeto(''.join([self.var_wcs_corrected_path, '/', var_key, '_wcs_corrected.fits']), overwrite=True)
+            
+            with fits.open(''.join([self.var_wcs_corrected_path, '/', data_key, '_wcs_corrected.fits']), 'update') as hdu:
+                data = hdu[0].data
+                data_header = hdu[0].header
+                # change the header values in data cube to correct wcs reference
+                data_header['CRPIX1'] = self.cube_dict[data_key]['xpix']
+                data_header['CRPIX2'] = self.cube_dict[data_key]['ypix']
+                data_header['CRVAL1'] = self.cube_dict[data_key]['xval']
+                data_header['CRVAL2'] = self.cube_dict[data_key]['yval']
+                
+            with fits.open(''.join([self.var_wcs_corrected_path, '/', var_key, '_wcs_corrected.fits']), 'update') as hdu:
+                var = hdu[0].data
+                var_header = hdu[0].header
+                # change the header values in variance cube to correct wcs reference
+                var_header['CRPIX1'] = self.cube_dict[var_key]['xpix']
+                var_header['CRPIX2'] = self.cube_dict[var_key]['ypix']
+                var_header['CRVAL1'] = self.cube_dict[var_key]['xval']
+                var_header['CRVAL2'] = self.cube_dict[var_key]['yval']
+            
+            
+        # join cubes
+        self.join_cubes(self.data_wcs_corrected_path, self.var_wcs_corrected_path,
+                        self.wcs_corrected_path, '/*wcs_corrected.fits')
+
+        return 0
+
 
     def stack_cubes(self, stacked_cubes_name):
         '''
@@ -265,70 +391,28 @@ class manipulate_icubes:
 
         stacked_cubes_name: filename of the stacked cubes fits file (e.g. 'stacked.fits')
         '''
-        # create image metadata table for reprojected cubes
-        im_meta = mImgtbl(self.rebinned_cubes_path,
-                        ''.join([self.rebinned_cubes_path, '/icubes-proj.tbl']), showCorners=True)
-        print(im_meta)
+        # create image metadata table for reprojected data cubes
+        im_meta_data = mImgtbl(self.data_wcs_corrected_path,
+                        ''.join([self.data_wcs_corrected_path, '/icubes-proj.tbl']), showCorners=True)
+        print(im_meta_data)
+        # create image metadata table for reprojected variance cubes
+        im_meta_var = mImgtbl(self.var_wcs_corrected_path,
+                        ''.join([self.var_wcs_corrected_path, '/icubes-proj.tbl']), showCorners=True)
+        print(im_meta_var)
         
-        # actually add reprojected cubes
-        print(''.join([path, '/reproj/', output_name, '.fits']))
-        added_cubes = mAddCube(''.join([self.rebinned_cubes_path, '/']),
-                            ''.join([self.rebinned_cubes_path, '/icubes-proj.tbl']),
-                            ''.join([self.rebinned_cubes_path, '/icubes.hdr']),
-                            ''.join([self.rebinned_cubes_path, '/', stacked_cubes_name]),
+        # actually add reprojected data cubes
+        added_cubes_data = mAddCube(''.join([self.data_wcs_corrected_path, '/']),
+                            ''.join([self.data_wcs_corrected_path, '/icubes-proj.tbl']),
+                            ''.join([self.data_wcs_corrected_path, '/icubes.hdr']),
+                            ''.join([self.cube_path, 'data_', stacked_cubes_name]),
                             shrink=True)
-        print(added_cubes)
-
-
-    def wcs_correction(self):
-        '''
-        '''
-        # check if wcs_corrected path exists or not
-        if not os.path.exists(self.wcs_corrected_path):
-            os.mkdir(self.wcs_corrected_path)
-            
-        # correct the wcs according to the values in self.cube_dict   
-        cut_suff = '/*gradient_corrected.fits'
-        key_len = 14
-        cubes = glob.glob(''.join([self.gradient_corrected_path, cut_suff]))
-        for cube in cubes:
-            key = cube[-(len(cut_suff) + key_len - 1):-(len(cut_suff)-1)]
-            with fits.open(cube) as hdu:
-                data = hdu[0].data
-                data_header = hdu[0].header
-                data_med = np.median(data, axis=1)
-                var = hdu[1].data
-                var_header = hdu[1].header
-            
-            # change the header values in data cube to correct wcs reference
-            data_header['CRPIX1'] = self.cube_dict[key]['xpix']
-            data_header['CRPIX2'] = self.cube_dict[key]['ypix']
-            data_header['CRVAL1'] = self.cube_dict[key]['xval']
-            data_header['CRVAL2'] = self.cube_dict[key]['yval']
-            
-            # add necessary keywords to variance cube to 'add' a wcs
-            var_header['CRPIX1'] = self.cube_dict[key]['xpix']
-            var_header['CRPIX2'] = self.cube_dict[key]['ypix']
-            var_header['CRPIX3'] = data_header['CRPIX3']
-            var_header['CRVAL1'] = self.cube_dict[key]['xval']
-            var_header['CRVAL2'] = self.cube_dict[key]['yval']
-            var_header['CRVAL3'] = data_header['CRVAL3']
-            #!!!!!! the ones below need to be adjusted to work with the rebinned cubes !!!!!!!!!!!!!
-#             var_header['CRDELT1'] = data_header['CRDELT1']
-#             var_header['CRDELT2'] = data_header['CRDELT2']
-#             var_header['CRDELT3'] = data_header['CRDELT3']
-            var_header['WCSDIM'] = data_header['WCSDIM']
-            var_header['WCSNAME'] = data_header['WCSNAME']
-            var_header['RADESYS'] = data_header['RADESYS']
-        
-                
-        # save cubes to new directory
-        wcs_cube_hdu = fits.PrimaryHDU(data, data_header)
-        wcs_cube_vdu = fits.ImageHDU(var, var_header)
-        wcs_cube_hdul = fits.HDUList([wcs_cube_hdu, wcs_cube_vdu])
-        wcs_cube_hdul.writeto(''.join([self.wcs_corrected_path, '/', key, '_wcs_corrected.fits']), overwrite=True)
-
-        return 0
+        print(added_cubes_data)
+        added_cubes_var = mAddCube(''.join([self.var_wcs_corrected_path, '/']),
+                            ''.join([self.var_wcs_corrected_path, '/icubes-proj.tbl']),
+                            ''.join([self.var_wcs_corrected_path, '/icubes.hdr']),
+                            ''.join([self.cube_path, 'var_', stacked_cubes_name]),
+                            shrink=True)
+        print(added_cubes_var)
 
 
     def get_key(self, cube):
