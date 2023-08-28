@@ -67,8 +67,8 @@ class manipulate_icubes:
             data_header['NAXIS2'] = data.shape[1]
             data_header['NAXIS3'] = data.shape[2]
             data_header['CRPIX3'] -= (self.cube_dict[key]['z_border'][0]-1)
-            data_header['WAVALL0'] = math.ceil(data_header['WAVGOOD0'])
-            data_header['WAVALL1'] = math.floor(data_header['WAVGOOD1'])
+            data_header['WAVALL0'] = self.cube_dict[key]['WAVALL0']
+            data_header['WAVALL1'] = self.cube_dict[key]['WAVALL1']
             
             var_header['NAXIS1'] = var.shape[0]
             var_header['NAXIS2'] = var.shape[1]
@@ -142,8 +142,8 @@ class manipulate_icubes:
         var_header['RADESYS'] = data_header['RADESYS']
         var_header['SLSCL'] = data_header['SLSCL']
         var_header['PXSCL'] = data_header['PXSCL']
-        var_header['WAVALL0'] = data_header['WAVALL0']
-        var_header['WAVALL1'] = data_header['WAVALL1']
+        var_header['WAVALL0'] = self.cube_dict[key]['WAVALL0']
+        var_header['WAVALL1'] = self.cube_dict[key]['WAVALL1']
         var_header['WAVGOOD0'] = data_header['WAVGOOD0']
         var_header['WAVGOOD1'] = data_header['WAVGOOD1']
         
