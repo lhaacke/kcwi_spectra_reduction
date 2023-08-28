@@ -232,6 +232,7 @@ class manipulate_icubes:
             h1 = hdu[0].header
             ratio = h1['SLSCL']/h1['PXSCL']
         if header:
+            print('Returning header.')
             return ratio, h1
         else:
             return ratio
@@ -357,6 +358,7 @@ class manipulate_icubes:
         # get arearatio and header data
         if header:
             arearatio_data, orig_header_data = self.get_area_ratio(data_cubes[0], header=True)
+            print(orig_header_data['CD3_3'])
             arearatio_var, orig_header_var = self.get_area_ratio(var_cubes[0], header=True)
         else:
             arearatio_data = self.get_area_ratio(data_cubes[0])
@@ -430,8 +432,11 @@ class manipulate_icubes:
 
 
         # update stacked data cube hdr
-        self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]))
-        self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]))
+        orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
+        with fits.open(orig_headers[0]) as hdu:
+            h1_stacked_template = hdu[0].header
+        self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]), h1_stacked_template)
+        self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
 
         # join cubes
         # self.join_cubes(''.join([self.cube_path, 'data_', stacked_cubes_name]), ''.join([self.cube_path, 'var_', stacked_cubes_name]),
@@ -440,18 +445,16 @@ class manipulate_icubes:
         return 0
 
 
-    def fix_stacked_hdr(self, cube, orig_cube):
+    def fix_stacked_hdr(self, cube, hdr0):
         '''
         add all necessary keywords to header of stacked cube
         '''
-        with fits.open(orig_cube) as hdu:
-            hdr0 = hdu[0].header
-
         with fits.open(cube, 'update') as hdr1:
             hdr1[0].header['CUNIT3'] = hdr0['CUNIT3']
             hdr1[0].header['CTYPE3'] = hdr0['CTYPE3']
             hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
             hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
+            hdr1[0].header['CDELT3'] = hdr0['CD3_3']
             hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
             hdr1[0].header['WAVGOOD1'] = hdr0['WAVGOOD1']
 
