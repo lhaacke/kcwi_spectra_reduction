@@ -232,7 +232,6 @@ class manipulate_icubes:
             h1 = hdu[0].header
             ratio = h1['SLSCL']/h1['PXSCL']
         if header:
-            print('Returning header.')
             return ratio, h1
         else:
             return ratio
@@ -247,7 +246,6 @@ class manipulate_icubes:
         hdr0: header of an original cube containing the keywords
         '''
         with fits.open(cube, 'update') as hdr1:
-            print('fixing headers')
             hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
             hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
             hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
@@ -261,8 +259,6 @@ class manipulate_icubes:
             hdr1[0].header['WCSDIM'] = hdr0['WCSDIM']
             hdr1[0].header['WCSNAME'] = hdr0['WCSNAME']
             hdr1[0].header['RADESYS'] = hdr0['RADESYS']
-        with fits.open(cube) as hdu:
-            print(hdu[0].header['CDELT3'])
 
         return 0
 
@@ -339,10 +335,8 @@ class manipulate_icubes:
             
         # Montage pre-processing for data and var separately
         imlist_data = mImgtbl(self.data_wcs_corrected_path, ''.join([self.data_rebinned_path, '/icubes.tbl']), showCorners=True)
-        print(''.join([self.data_rebinned_path, '/icubes.tbl']))
         print(imlist_data)
         imlist_var = mImgtbl(self.var_wcs_corrected_path, ''.join([self.var_rebinned_path, '/icubes.tbl']), showCorners=True)
-        print(''.join([self.var_rebinned_path, '/icubes.tbl']))
         print(imlist_var)
 
         # use mMakeHdr
@@ -358,7 +352,6 @@ class manipulate_icubes:
         # get arearatio and header data
         if header:
             arearatio_data, orig_header_data = self.get_area_ratio(data_cubes[0], header=True)
-            print(orig_header_data['CD3_3'])
             arearatio_var, orig_header_var = self.get_area_ratio(var_cubes[0], header=True)
         else:
             arearatio_data = self.get_area_ratio(data_cubes[0])
@@ -378,7 +371,6 @@ class manipulate_icubes:
                                     ''.join([self.var_rebinned_path, '/icubes.hdr']),
                                     drizzle=1.0, energyMode=False, fluxScale=arearatio_var)                        
             if header:
-                print('about to fix headers')
                 self.fix_rebinned_hdr(''.join([self.data_rebinned_path, '/', data_key, '_reproj.fits']), orig_header_data)
                 self.fix_rebinned_hdr(''.join([self.var_rebinned_path, '/', var_key, '_reproj.fits']), orig_header_var)
 
@@ -413,10 +405,6 @@ class manipulate_icubes:
         print(im_meta_var)
         
         # actually add reprojected data cubes
-        print(''.join([self.data_rebinned_path, '/']))
-        print(''.join([self.data_rebinned_path, '/icubes-proj.tbl']))
-        print(''.join([self.data_rebinned_path, '/icubes.hdr']))
-        print(''.join([self.cube_path, 'data_', stacked_cubes_name]))
         added_cubes_data = mAddCube(''.join([self.data_rebinned_path, '/']),
                             ''.join([self.data_rebinned_path, '/icubes-proj.tbl']),
                             ''.join([self.data_rebinned_path, '/icubes.hdr']),
