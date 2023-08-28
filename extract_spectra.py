@@ -16,30 +16,24 @@ from photutils.aperture import SkyEllipticalAperture
 
 
 class ExtractSpectra:
-
-    def __init__(self, path_to_cube, path_to_save, ra_list, dec_list, size):
+    def __init__(self, data_stacked_path, var_stacked_path, gc_dict):
         '''
-        path_to_cube: filepath to data cube
-        path_to_save: path to directory where files are saved. Subdirectories added in corresponding function where needed
-        ra/dec_list: iterable containing ra and dec of wanted targets
-        size: (semimajor, semiminor, position angle of semimajor) all in angular units
+        data_stacked_path: path to stacked data cube, including name.fits
+        var_stacked_path: path to stacked variance cube, including name.fits
+        gc_dict: dictionary containing the gc, corresponding ra, dec and aperture ellipse for extraction
         '''
-        with fits.open(path_to_cube) as hdu:
-            self.cube = hdu[0].data
-            self.header = hdu[0].header
-            self.wcs = WCS(hdu[0].header)
-        # initialise dictionary with information on each object
-        # make the regions
-        self.coords = SkyCoord(ra=ra_list, dec=dec_list, unit=(u.degree, u.degree))
-        a, b, theta = size
-        self.regions = SkyEllipticalAperture(self.coords, a, b, theta)
-        # get path where to save files
-        self.save_dir = path_to_save
+        with fits.open(data_stacked_path) as hdu:
+            self.data_cube_header = hdu[0].header
+            self.data_cube_data = hdu[0].data
+        with fits.open(data_stacked_path) as hdu:
+            self.data_cube_header = hdu[0].header
+            self.data_cube_data = hdu[0].data
+        self.wcs = WCS(hdu[0].header)
+        self.coords = SkyCoord(gc_dict)
 
 
     def get_spec_from_cube(self, mode='median', subtract_sky=True):
         '''
-
         mode: mode of combining the information from spaxels, default: median
         '''
         # get mask & combine with cube
@@ -74,7 +68,6 @@ class ExtractSpectra:
         return spec - sky_spec
 
 
-
     def write_spectrum_header(self):
         '''
         returns a header object that can be used for a spectrum based on the header of the original 
@@ -107,7 +100,7 @@ class ExtractSpectra:
         shape: tuple with shape of the data cube in pixels
         '''
         mask = np.zeros(np.shape(self.data)) # make mask the same shape as data cube
-        wcs_mask = get_mask_wcs()
+        wcs_mask = self.get_mask_wcs()
 
         pixel_aperture = apertures.to_pixel(wcs=wcs_mask)
         pixel_mask = pixel_aperture.to_mask(method='exact') # mask in pixel coordinates
@@ -122,3 +115,41 @@ class ExtractSpectra:
         wcs_mask = self.wcs.dropaxis(dropax=2)
         return wcs_mask
         
+
+class Spectrum:
+    def __init__(self, spec_path):
+        '''
+        spec_path: path to spectrum including name.fits
+        '''
+        with fits.open(spec_path) as hdu:
+            self.spectrum = hdu[0].data
+            self.spectrum_header = hdu[0].header
+        
+    def smooth_spectrum(self, spec, sig=3):
+        '''
+        Smooths a spectrum using Gaussian kernel smoothing.
+        spec (array-like): Array of intensity values corresponding to the wavelengths
+        sig (float): Standard deviation of the Gaussian kernel
+        returns smoothed spectrum
+        '''
+        smoothed_spec = gaussian_filter1d(self.spectrum, sig)
+
+        return smoothed_spec
+
+    def plot(self, smoothed_spectrum=True, sig=3):
+        '''
+        makes and saves various plots of the spectrum
+
+        smoothed_spectrum (bool): whether or not to plot the smoothed spectrum
+        sig: sig (float): Standard deviation of the Gaussian kernel when smoothing the spectrum
+        '''
+        if smoothed_spectrum:
+            smoothed_spec = self.smooth_spectrum(self.spectrum, )
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(18,9), sharex=True)
+            x = np.arange(spec_header['WAVALL0'], spec_header['WAVALL1']+spec_header['CDELT1'], spec_header['CDELT1'])
+            ax.plot(x, spec, c='tab:blue', label='full resolution spectrum')
+            ax.plot(x, smoothed_spec, c='tab:orange', label='smoothed, sig={}'.format(sig))
+            ax.legend(loc='upper right')
+            plt.subplots_adjust(hspace=.0)
+            
+
