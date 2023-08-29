@@ -420,11 +420,11 @@ class manipulate_icubes:
 
 
         # update stacked data cube hdr
-        orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
-        with fits.open(orig_headers[0]) as hdu:
-            h1_stacked_template = hdu[0].header
-        self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]), h1_stacked_template)
-        self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
+        # orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
+        # with fits.open(orig_headers[0]) as hdu:
+        #     h1_stacked_template = hdu[0].header
+        # self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]), h1_stacked_template)
+        # self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
 
         # join cubes
         # self.join_cubes(''.join([self.cube_path, 'data_', stacked_cubes_name]), ''.join([self.cube_path, 'var_', stacked_cubes_name]),

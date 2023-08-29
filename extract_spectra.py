@@ -14,6 +14,9 @@ import pyregion
 from pyregion.region_to_filter import as_region_filter
 from photutils.aperture import SkyEllipticalAperture
 
+# import from own repository
+from ppxf_fit_kinematics import *
+
 
 class ExtractSpectra:
     def __init__(self, data_stacked_path, var_stacked_path, gc_dict):
@@ -144,10 +147,10 @@ class Spectrum:
         sig: sig (float): Standard deviation of the Gaussian kernel when smoothing the spectrum
         '''
         if smoothed_spectrum:
-            smoothed_spec = self.smooth_spectrum(self.spectrum, )
+            smoothed_spec = self.smooth_spectrum(self.spectrum)
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(18,9), sharex=True)
-            x = np.arange(spec_header['WAVALL0'], spec_header['WAVALL1']+spec_header['CDELT1'], spec_header['CDELT1'])
-            ax.plot(x, spec, c='tab:blue', label='full resolution spectrum')
+            x = np.arange(self.spectrum_header['WAVALL0'], self.spectrum_header['WAVALL1']+self.spectrum_header['CDELT1'], self.spectrum_header['CDELT1'])
+            ax.plot(x, self.spectrum, c='tab:blue', label='full resolution spectrum')
             ax.plot(x, smoothed_spec, c='tab:orange', label='smoothed, sig={}'.format(sig))
             ax.legend(loc='upper right')
             plt.subplots_adjust(hspace=.0)
