@@ -18,16 +18,10 @@ class manipulate_icubes:
         self.cut_cubes_path = ''.join([self.cube_path, 'icubes_cut_1'])
         
         self.data_gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected_data_2'])
-        self.var_gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected_var_2'])
-        self.gradient_corrected_path = ''.join([self.cube_path, 'icubes_gradient_corrected_2'])
         
         self.data_wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_data_3'])
-        self.var_wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_var_3'])
-        self.wcs_corrected_path = ''.join([self.cube_path, 'icubes_wcs_corrected_3'])
         
         self.data_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_data_4'])
-        self.var_rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_var_4'])
-        self.rebinned_path = ''.join([self.cube_path, 'icubes_rebinned_4'])
         
         self.cube_dict = cube_dict
         
@@ -263,11 +257,10 @@ class manipulate_icubes:
 
 
         # update stacked data cube hdr
-        # orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
-        # with fits.open(orig_headers[0]) as hdu:
-        #     h1_stacked_template = hdu[0].header
-        # self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]), h1_stacked_template)
-        # self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
+        orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
+        with fits.open(orig_headers[0]) as hdu:
+            h1_stacked_template = hdu[0].header
+        self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
 
         return 0
 
