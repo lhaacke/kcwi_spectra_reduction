@@ -12,7 +12,7 @@ from astropy.io import fits
 from MontagePy.main import *
 
 
-class manipulate_icubes:
+class Manipulate_icubes:
     def __init__(self, cube_path, cube_dict):
         self.cube_path = cube_path
         self.cut_cubes_path = ''.join([self.cube_path, 'icubes_cut_1'])
@@ -294,7 +294,7 @@ class manipulate_icubes:
             wcs_cube_hdu.writeto(''.join([self.data_wcs_corrected_path, '/', data_key, '_wcs_corrected.fits']), overwrite=True)
             wcs_cube_vdu.writeto(''.join([self.var_wcs_corrected_path, '/', var_key, '_wcs_corrected.fits']), overwrite=True)
             
-            with fits.open(''.join([self.var_wcs_corrected_path, '/', data_key, '_wcs_corrected.fits']), 'update') as hdu:
+            with fits.open(''.join([self.data_wcs_corrected_path, '/', data_key, '_wcs_corrected.fits']), 'update') as hdu:
                 data = hdu[0].data
                 data_header = hdu[0].header
                 # change the header values in data cube to correct wcs reference
@@ -420,11 +420,11 @@ class manipulate_icubes:
 
 
         # update stacked data cube hdr
-        # orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
-        # with fits.open(orig_headers[0]) as hdu:
-        #     h1_stacked_template = hdu[0].header
-        # self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]), h1_stacked_template)
-        # self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
+        orig_headers = glob.glob(''.join([self.data_wcs_corrected_path, '/*.fits'])) # get header with original axis data
+        with fits.open(orig_headers[0]) as hdu:
+            h1_stacked_template = hdu[0].header
+        self.fix_stacked_hdr(''.join([self.cube_path, 'var_', stacked_cubes_name]), h1_stacked_template)
+        self.fix_stacked_hdr(''.join([self.cube_path, 'data_', stacked_cubes_name]), h1_stacked_template)
 
         # join cubes
         # self.join_cubes(''.join([self.cube_path, 'data_', stacked_cubes_name]), ''.join([self.cube_path, 'var_', stacked_cubes_name]),
@@ -445,6 +445,7 @@ class manipulate_icubes:
             hdr1[0].header['CDELT3'] = hdr0['CD3_3']
             hdr1[0].header['WAVGOOD0'] = hdr0['WAVGOOD0']
             hdr1[0].header['WAVGOOD1'] = hdr0['WAVGOOD1']
+            hdr1[0].header['BUNIT'] = hdr0['BUNIT']
 
         return 0
 
