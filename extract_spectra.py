@@ -40,24 +40,31 @@ class ExtractSpectra:
             self.var_cube_header = hdu[0].header
             self.var_cube_data = hdu[0].data
         self.regions = Regions.read(regions_path)
-        self.sky_regions = Regions.read(sky_regions_path)
+        self.sky_regions = Regions.read(sky_regions_path) # make this into sky coords?
         self.data_spectra_path = ''.join([data_stacked_path, '/data_spectra'])
         self.var_spectra_path = ''.join([var_stacked_path, '/var_spectra'])
         self.plot_path = ''.join([data_stacked_path, '/plots'])
         
     
-    def get_masks_from_regions(self, regions):
+    def get_masks_from_regions(self, regions, sky_regions):
         '''
         returns a list of masks based on the regions file provided
         '''
         masks = [] # list of all the masks to be returned
-        for region in regions:
+        sky_masks = [] # list of corresponding sky masks
+        for region, sky_region in zip(regions, sky_regions):
             aper = SkyEllipticalAperture(region.center, region.width, region.height, theta=region.angle)
             aper_pix = aper.to_pixel(wcs=self.wcs.dropaxis(dropax=2))
             aper_mask = aper_pix.to_mask(method='exact')
             masks.append(aper_mask)
-        
-        return masks
+            
+            sky = SkyEllipticalAperture(sky_region.center, sky_region.width,
+                                        sky_region.height, theta=sky_region.angle)
+            sky_pix = sky.to_pixel(wcs=self.wcs.dropaxis(dropax=2))
+            sky_mask = sky_pix.to_mask(method='exact')
+            sky_masks.append(sky_mask)
+
+        return masks, sky_masks
     
     
     def write_spectrum_header(self, spec_header, data_header, comment=''):
@@ -87,38 +94,35 @@ class ExtractSpectra:
         return spec_header
     
     
-    def sky_subtract(self, spec, header, cube, mode='median'):
+    def sky_subtract(self, spec, header, cube, sky_mask, mode='median'):
         '''
         extracts a sky spectrum and subtracts it from spec
         
         spec: spectrum to subtract the sky spectrum from
         '''
         sky_spec = np.zeros(header['NAXIS3']) # initialise spectrum
-        sky_mask = self.get_masks_from_regions(self.sky_regions) # make sky mask
         # apply the sky mask
         if mode=='median':
             for i in range(header['NAXIS3']):
-                sky_spec[i] = np.median(sky_mask[0].get_values(cube[i,:,:]))
+                sky_spec[i] = np.median(sky_mask.get_values(cube[i,:,:]))
         elif mode=='sum':
             for i in range(header['NAXIS3']):
-                sky_spec[i] = np.median(sky_mask[0].get_values(cube[i,:,:]))
+                sky_spec[i] = np.median(sky_mask.get_values(cube[i,:,:]))
         else:
             sys.exit('Unknown method of combining pixels.')
         
         # subtract spectra
         sky_subtracted_spec = spec - sky_spec
         
-        if return_mask:
-            return sky_mask
-        else:
-            return sky_subtracted_spec
+        return sky_subtracted_spec
     
     
-    def extract_spectra(self, sky_subtract=True):
+    def extract_spectra(self, sky_subtract=True, plot=True):
         '''
         extracts spectrum from specified regions and save it as fits in a folder
         
-        sky_subtract (Boolean type): saved spectra will be locally sky subtracted if true
+        sky_subtract (Bool): saved spectra will be locally sky subtracted if true
+        plot (Bool): plot image of the cube, mask and sky mask as sanity check
         '''
         if not os.path.exists(self.data_spectra_path):
             os.mkdir(self.data_spectra_path)
@@ -126,33 +130,45 @@ class ExtractSpectra:
             os.mkdir(self.var_spectra_path)
         
         # get the masks
-        masks = self.get_masks_from_regions(self.regions)
+        masks, sky_masks = self.get_masks_from_regions(self.regions, self.sky_regions)
         
         # apply the mask
-        for i, mask in enumerate(masks):
+        for i, (mask, sky_mask) in enumerate(zip(masks, sky_masks)):
             data_spec_med = np.zeros(self.data_cube_header['NAXIS3'])
             data_spec_sum = np.zeros(self.data_cube_header['NAXIS3'])
             var_spec_med = np.zeros(self.var_cube_header['NAXIS3'])
             var_spec_sum = np.zeros(self.var_cube_header['NAXIS3'])
             
+            # initialise arrays for mask-weighted cubes
+            mask_weighted_data = np.zeros(shape=self.data_cube_data.shape)
+            mask_weighted_var = np.zeros(shape=self.var_cube_data.shape)
+            
+            # get mask images
+            mask_im = mask.to_image(shape=(self.data_cube_header['NAXIS2'], self.data_cube_header['NAXIS1']))
+            sky_mask_im = sky_mask.to_image(shape=(self.data_cube_header['NAXIS2'], self.data_cube_header['NAXIS1']))
+            
             for j in range(self.data_cube_header['NAXIS3']):
                 data_spec_med[j] = np.median(mask.get_values(self.data_cube_data[j,:,:]))
                 data_spec_sum[j] = np.sum(mask.get_values(self.data_cube_data[j,:,:]))
                 mask_weighted_data[j,:,:] *= mask_im
+
                 var_spec_med[j] = np.median(mask.get_values(self.var_cube_data[j,:,:]))
                 var_spec_sum[j] = np.sum(mask.get_values(self.var_cube_data[j,:,:]))
                 mask_weighted_var[j,:,:] *= mask_im
+            
+            if plot:
+                self.plot_apertures(self.data_cube_data, self.var_cube_data, mask_im, sky_mask_im, i) 
                 
             # apply sky subtraction if sky_subtract=True
             if sky_subtract:
                 data_spec_med_skysub = self.sky_subtract(data_spec_med, header=self.data_cube_header,
-                                                         cube=self.data_cube_data, mode='median')
+                                                         cube=self.data_cube_data, sky_mask=sky_mask, mode='median')
                 data_spec_sum_skysub = self.sky_subtract(data_spec_sum, header=self.data_cube_header,
-                                                         cube=self.data_cube_data, mode='sum')
+                                                         cube=self.data_cube_data, sky_mask=sky_mask, mode='sum')
                 var_spec_med_skysub = self.sky_subtract(var_spec_med, header=self.var_cube_header,
-                                                         cube=self.var_cube_data, mode='median')
+                                                         cube=self.var_cube_data, sky_mask=sky_mask, mode='median')
                 var_spec_sum_skysub = self.sky_subtract(var_spec_sum, header=self.var_cube_header,
-                                                         cube=self.var_cube_data, mode='sum')
+                                                         cube=self.var_cube_data, sky_mask=sky_mask, mode='sum')
                 # create spectra hdus
                 data_spec_med_skysub_hdu = fits.PrimaryHDU(data=data_spec_med_skysub)
                 data_spec_sum_skysub_hdu = fits.PrimaryHDU(data=data_spec_sum_skysub)
@@ -176,6 +192,7 @@ class ExtractSpectra:
                 data_spec_sum_skysub_hdu.writeto(''.join([self.data_spectra_path, '/gc{}_spectrum_sum.fits'.format(i)]), overwrite=True)
                 var_spec_med_skysub_hdu.writeto(''.join([self.var_spectra_path, '/gc{}_spectrum_median.fits'.format(i)]), overwrite=True)
                 var_spec_sum_skysub_hdu.writeto(''.join([self.var_spectra_path, '/gc{}_spectrum_sum.fits'.format(i)]), overwrite=True)
+            
             # unsubtracted spectra
             else:
                 # create spectra hdus
@@ -197,7 +214,7 @@ class ExtractSpectra:
         return 0
     
         
-    def plot_apertures(self, cube, mask, sky_mask, plot_cube=True, plot_mask=True, plot_sky=True):
+    def plot_apertures(self, cube, var_cube, mask_im, sky_mask_im, i=''):
         '''
         plots the median image of the data cube, applied mask, applied sky aperture
 
@@ -205,16 +222,22 @@ class ExtractSpectra:
         mask (bool): include image of the aperture from which spectra are extracted if True
         sky (bool): include image of sky area from which sky spectra is extracted if True
         '''
-        if plot_cube and plot_mask and plot_sky:
-            with fits.open(cube) as hdu:
-                data = hdu[0].data
-                cube = 
-            cube_median = np.median(cube)
-            mask_im = mask.to_image(shape=(cube['NAXIS2'], self.data_cube_header['NAXIS1']))
-            
-            mask_weighted_data = np.zeros(shape=self.data_cube_data.shape)
-            mask_weighted_var = np.zeros(shape=self.var_cube_data.shape)
+        if not os.path.exists(self.plot_path):
+            os.mkdir(self.plot_path)
         
+        cube_median = np.median(cube, axis=0)
+        var_cube_median = np.median(var_cube, axis=0)
+        
+        fig, ax = plt.subplots(nrows=1, ncols = 4, figsize=(24,16), subplot_kw={'projection':self.wcs, 'slices':('y', 'x', 200)})
+        im0 = ax[0].imshow(cube_median)
+        im1 = ax[1].imshow(var_cube_median)
+        im2 = ax[2].imshow(mask_im, interpolation='nearest', origin='lower')
+        im3 = ax[3].imshow(sky_mask_im, interpolation='nearest', origin='lower')
+        
+        plt.savefig(''.join([self.plot_path, '/gc{}_extraction_mask.png'.format(i)]))
+        plt.close()
+        
+        return 0
         
 
 class Spectrum:
