@@ -21,8 +21,7 @@ from ppxf_fit_kinematics import *
 
 
 class ExtractSpectra:
-    def __init__(self, data_stacked_path, data_cube_name, var_stacked_path,
-                 var_cube_name, regions_path, sky_regions_path):
+    def __init__(self, cube_path, stacked_cubes_name, regions_path, sky_regions_path):
         '''
         data_stacked_path: path to stacked data cube
         data_cube_name: file name of data cube, including file ending (e.g. .fits)
@@ -32,18 +31,18 @@ class ExtractSpectra:
         regions_path: path to file with regions (ds9 format) from which to extract the spectra
         sky_regions_path: path to sky region (careful: at the moment only supports one sky region for all the spectra)
         '''
-        with fits.open(''.join([data_stacked_path, '/', data_cube_name])) as hdu:
+        with fits.open(''.join([cube_path, '/data_', stacked_cubes_name])) as hdu:
             self.data_cube_header = hdu[0].header
             self.data_cube_data = hdu[0].data
             self.wcs = WCS(hdu[0].header)
-        with fits.open(''.join([var_stacked_path, '/', var_cube_name])) as hdu:
+        with fits.open(''.join([cube_path, '/var', stacked_cubes_name])) as hdu:
             self.var_cube_header = hdu[0].header
             self.var_cube_data = hdu[0].data
         self.regions = Regions.read(regions_path)
         self.sky_regions = Regions.read(sky_regions_path) # make this into sky coords?
-        self.data_spectra_path = ''.join([data_stacked_path, '/data_spectra'])
-        self.var_spectra_path = ''.join([var_stacked_path, '/var_spectra'])
-        self.plot_path = ''.join([data_stacked_path, '/plots'])
+        self.data_spectra_path = ''.join([cube_path, '/data_spectra'])
+        self.var_spectra_path = ''.join([cube_path, '/var_spectra'])
+        self.plot_path = ''.join([cube_path, '/plots'])
         
     
     def get_masks_from_regions(self, regions, sky_regions):
