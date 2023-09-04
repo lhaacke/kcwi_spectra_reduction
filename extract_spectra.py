@@ -4,20 +4,19 @@ Lydia Haacke
 '''
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import glob
+import re
 
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+from fabada import fabada
 from astropy import units as u
 
 from regions import Regions
 
-import pyregion
-from pyregion.region_to_filter import as_region_filter
 from photutils.aperture import SkyEllipticalAperture
-
-# import from own repository
-from ppxf_fit_kinematics import *
 
 
 class ExtractSpectra:
@@ -31,11 +30,11 @@ class ExtractSpectra:
         regions_path: path to file with regions (ds9 format) from which to extract the spectra
         sky_regions_path: path to sky region (careful: at the moment only supports one sky region for all the spectra)
         '''
-        with fits.open(''.join([cube_path, '/data_', stacked_cubes_name])) as hdu:
+        with fits.open(''.join([cube_path, 'data_', stacked_cubes_name])) as hdu:
             self.data_cube_header = hdu[0].header
             self.data_cube_data = hdu[0].data
             self.wcs = WCS(hdu[0].header)
-        with fits.open(''.join([cube_path, '/var', stacked_cubes_name])) as hdu:
+        with fits.open(''.join([cube_path, 'var_', stacked_cubes_name])) as hdu:
             self.var_cube_header = hdu[0].header
             self.var_cube_data = hdu[0].data
         self.regions = Regions.read(regions_path)
@@ -237,6 +236,67 @@ class ExtractSpectra:
         plt.close()
         
         return 0
+
+
+class Noise:
+    def __init__(self, cube_path, spec_ending, noise_spec_ending):
+        '''
+        cube_path (string): path to stacked data and variance cube
+        spec_ending (string): filename ending of data_spectra (*file_ending.fits)
+        noise_spec_ending (string): filename ending of noise spectra (*file_ending.fits)
+        '''
+        self.specs = np.sort(glob.glob(''.join([cube_path, '/data_spectra/', spec_ending])))
+        self.noise_specs = np.sort(glob.glob(''.join([cube_path, '/var_spectra/', noise_spec_ending])))
+        self.denoised_specs_path = ''.join([cube_path, '/denoised_spectra'])
+        
+        
+    def apply_fabada(self, spec, noise_spec):
+        '''
+        uses fabada to estimate noise and recover noise-reduced spectrum
+        '''
+        return(fabada(spec, noise_spec))
+
+    
+    def save_spec(self, spectrum, header, path):
+        '''
+        saves a spectrum with the header as fits
+        
+        spectrum (array): 1D array with spectrum
+        header (fits.hdu): fits header data unit
+        gc_number: internal index of the gc this spectrum is from
+        '''
+        if not os.path.exists(self.denoised_specs_path):
+            os.mkdir(self.denoised_specs_path)
+        
+        spec_hdu = fits.PrimaryHDU(spectrum, header)
+        spec_hdu.writeto(path, overwrite=True)
+        
+        return 0
+
+    
+    def denoise(self):
+        '''
+        removes the noise from spectra using fabada
+        '''
+        for spec, noise_spec in zip(self.specs, self.noise_specs):
+            gc_num_spec = re.findall(r'gc[0-9]+', spec)
+            gc_num_noise_spec = re.findall(r'gc[0-9]+', noise_spec)
+            if gc_num_spec[0] != gc_num_noise_spec[0]:
+                sys.exit('Data and variance spectrum do not match.')
+            # get the data and noise spectrum
+            with fits.open(spec) as hdu:
+                spec_data = hdu[0].data
+                spec_header = hdu[0].header
+            with fits.open(noise_spec) as hdu:
+                noise_spec_data = hdu[0].data
+                noise_spec_header = hdu[0].header  
+            # denoise and save spectrum
+            denoised_spec = self.apply_fabada(spec_data, noise_spec_data)
+            self.save_spec(denoised_spec, spec_header,
+                           ''.join([self.denoised_specs_path, '/{}_denoised.fits'.format(gc_num_spec[0])]))
+        
+        return 0
+    
         
 
 class Spectrum:
