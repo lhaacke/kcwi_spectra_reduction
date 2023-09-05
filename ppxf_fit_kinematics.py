@@ -16,7 +16,7 @@ def vac_to_air(lam_vac):
     lam_air = lam_vac / (1.0 + 2.735182e-4 + 131.4182 / lam_vac**2 + 2.76249e8 / lam_vac**4)
     return lam_air
 
-def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec=''):
+def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec='', mask_skylines=False, plot_results=False):
     '''
     currently working for KCWI spectra (and specifically for swinburne or yale observed of NGC5846_UDG1)
     spectrum: fits file with spectrum to fit
@@ -32,7 +32,7 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     '''
 
     ppxf_dir = path.dirname(path.realpath(util.__file__))
-    print('I WAS IN CODES')
+    print('I WAS IN GC_SPECTRA_COLLECTED/GCx')
 
     ################################ PROCESS GALAXY SPECTRUM ##############################
     # read the spectrum and define the wavelength range to fit
@@ -41,22 +41,21 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     gal_lin = hdu[0].data
     h1 = hdu[0].header
 
+    inf_check = np.isinf(gal_lin)
     nan_check = np.isnan(gal_lin)
-    gal_lin[nan_check] = 0.
+    gal_lin[inf_check] = np.median(gal_lin)
+    gal_lin[nan_check] = np.nanmedian(gal_lin)
 
     lamRange1 = np.array([h1['WAVALL0'], h1['WAVALL1']])
+    print(grating)
 
-    if grating[0]=='BH3_Medium' and grating[1]=='swin':
+    if grating=='BH3_Medium':
         fwhm_gal = np.average(lamRange1/9000)
-    elif grating[0]=='BH3_Large' and grating[1]=='swin':
+    elif grating=='BH3_Large':
         fwhm_gal = np.average(lamRange1/4500)
-    elif grating[0]=='BH3_Large' and grating[1]=='yale':
-        fwhm_gal = np.average(lamRange1/4500)
-    elif grating[0]=='BL_Large' and grating[1]=='swin':
+    elif grating=='BL_Large':
         fwhm_gal = np.average(lamRange1/900)
-    elif grating[0]=='BL_Large' and grating[1]=='yale':
-        fwhm_gal = np.average(lamRange1/900)
-    print('{}, {}, fwhm_gal:{}'.format(grating[0], grating[1], fwhm_gal))
+    print('{}, fwhm_gal:{}'.format(grating, fwhm_gal))
 
     # redshift adjustment if necessary
     # controlled by bool shift_spec, default True
@@ -125,6 +124,16 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
             mask[1][int(mask_frac[mask[0]][0]*len(galaxy)) : int(mask_frac[mask[0]][1]*len(galaxy))] = 0
             goodPixels.append(np.flatnonzero(mask[1]))
         print('bootstrap masks done')
+    elif mask_skylines:
+        skylines = np.array([5199, 5577, 5592])
+        mask = np.full_like(galaxy, 1)
+        mask[:10] = 0
+        mask[-10:] = 0
+        for line in skylines:
+            c = ((ln_lam1 < np.log(line - 5)) | (ln_lam1 > np.log(line + 5)))
+            mask_indices = np.where(c)
+            mask[mask_indices] = 0
+        goodPixels = np.flatnonzero(mask)
     else:
         print('spectrum not cut')
         mask = np.full_like(galaxy, 1)
@@ -144,8 +153,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     t = clock()
 
     if fit:
-        degree = [1, 3, 5, 7, 9, 11, 13, 15]
-        mdegree = [1, 2, 3, 4, 5, 6]
+        degree = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        mdegree = [1, 2, 3, 4, 5, 6, 7, 8]
         # degree = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
         # mdegree = [5, 6, 7, 8, 9, 10, 11, 12]
         res = np.recarray(shape = (len(degree)*len(mdegree)), # array to store the result for each degree combination in
@@ -166,15 +175,20 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
                 redshift_best = np.exp(vtot/c) - 1          # eq.(8) Cappellari (2017)
                 errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
                 redshift_err = np.exp(vtot/c)*errors[0]/c   # Error propagation
-                sn_median = 2 * np.median(np.sqrt((pp.bestfit/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio median
+                sn_median = np.median(2*np.sqrt((pp.bestfit/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio median
+                sn_average = np.average(np.sqrt((pp.bestfit/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio average
                 # fill array with results
                 res[i] = (z, deg, mdeg, vtot, errors[0], redshift_best, redshift_err, pp.sol[1], errors[1], sn_median)
                 i += 1
+                if plot_results and (((deg < 1) and (mdeg < 2)) or (deg > 13)):
+                    save_plot = '{}_z{}_deg{}_mdeg{}.png'.format(spectrum[:-5], z, deg, mdeg)
+                    plot_result(pp, save_plot, redshift_best, lamRange1, smoothed_spec=smoothed_spec)
+
     elif bootstrap:
         # bootstrap_masks: array with different masks with different parts of the spectra masked
         # plan: run fit for each mask in the bootstrap mask array and save results same as with fit
-        deg = 5
-        mdeg = 3
+        deg = 1
+        mdeg = 1
         res = np.recarray(shape = (len(bootstrap_masks) + 1), # array to store the result for each degree combination in
                 dtype = [('deg', int), ('mdeg', int), ('v', float), ('v_err', float), ('z', float), ('z_err', float), ('sig', float),
                         ('sig_err', float), ('sn_median', float), ('sn_average', float)]) # one for deg, mdeg, v, v_err, redshift, redshift_error, S/N
@@ -239,14 +253,14 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
                 f.write('\n')
     elif bootstrap:
         fits.writeto(save_as, res, overwrite=True)
-    else:
+    elif plot_results:
         plot_result(pp, save_as, redshift_best, lamRange1, smoothed_spec=smoothed_spec)
         # plt.savefig(save_as)
         plt.close()
 
 
 
-def plot_result(pp, save_as, z_best, lamRange1, spec=True, shift_z=True, degree=10, smoothed_spec=''):
+def plot_result(pp, save_as, z_best, lamRange1, spec=True, shift_z=True, smoothed_spec=''):
     scale = 1e4  # divide by scale to convert Angstrom to micron
 
     if pp.lam is None:
