@@ -32,7 +32,6 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     '''
 
     ppxf_dir = path.dirname(path.realpath(util.__file__))
-    print('I WAS IN GC_SPECTRA_COLLECTED/GCx')
 
     ################################ PROCESS GALAXY SPECTRUM ##############################
     # read the spectrum and define the wavelength range to fit
@@ -153,10 +152,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     t = clock()
 
     if fit:
-        degree = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        degree = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
         mdegree = [1, 2, 3, 4, 5, 6, 7, 8]
-        # degree = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-        # mdegree = [5, 6, 7, 8, 9, 10, 11, 12]
         res = np.recarray(shape = (len(degree)*len(mdegree)), # array to store the result for each degree combination in
                 dtype = [('z_ini', float), ('deg', int), ('mdeg', int), ('v', float), ('v_err', float), ('z', float), ('z_err', float), ('sig', float),
                         ('sig_err', float), ('sn_median', float)]) # one for deg, mdeg, v, v_err, redshift, redshift_error, S/N
@@ -180,7 +177,7 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
                 # fill array with results
                 res[i] = (z, deg, mdeg, vtot, errors[0], redshift_best, redshift_err, pp.sol[1], errors[1], sn_median)
                 i += 1
-                if plot_results and (((deg < 1) and (mdeg < 2)) or (deg > 13)):
+                if plot_results and (((deg < 3) and (mdeg < 3)) or ((deg > 12) and (mdeg < 3))):
                     save_plot = '{}_z{}_deg{}_mdeg{}.png'.format(spectrum[:-5], z, deg, mdeg)
                     plot_result(pp, save_plot, redshift_best, lamRange1, smoothed_spec=smoothed_spec)
 
