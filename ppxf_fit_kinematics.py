@@ -16,7 +16,7 @@ def vac_to_air(lam_vac):
     lam_air = lam_vac / (1.0 + 2.735182e-4 + 131.4182 / lam_vac**2 + 2.76249e8 / lam_vac**4)
     return lam_air
 
-def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec='', mask_skylines=False, plot_results=False):
+def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec='', mask_skylines=False, plot_results=False):
     '''
     currently working for KCWI spectra (and specifically for swinburne or yale observed of NGC5846_UDG1)
     spectrum: fits file with spectrum to fit
@@ -109,19 +109,19 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
         mask[:n_pix_left] = 0
         mask[(len(galaxy)-n_pix_right):] = 0
         goodPixels = np.flatnonzero(mask)
-    elif bootstrap:
+    elif bootstrap: # mask different parts of the spectrum and see results
         print('making masks for bootstrap error')
-        bootstrap_masks = np.ones(shape=(10, len(galaxy)))
         goodPixels = []
-        # masking edges for all of theme
-        n_pix_left = int((h1['WAVGOOD0']-h1['WAVALL0']) / h1['CDELT1'] + 5)
-        n_pix_right = int((h1['WAVALL1']-h1['WAVGOOD1']) / h1['CDELT1'] + 5)
-        mask_frac = [(0, .1), (.1, .2), (.2, .3), (.3, .4), (.4, .5), (.5, .6), (.6, .7), (.7, .8), (.8, .9), (.9, 1.)]
-        for mask in enumerate(bootstrap_masks):
-            mask[1][:n_pix_left] = 0
-            mask[1][(len(galaxy)-n_pix_right):] = 0
-            mask[1][int(mask_frac[mask[0]][0]*len(galaxy)) : int(mask_frac[mask[0]][1]*len(galaxy))] = 0
-            goodPixels.append(np.flatnonzero(mask[1]))
+        # masking edges for all of them
+        masked_pix = [0, int(0.1*len(galaxy))]
+        while masked_pix[1] < len(galaxy):
+            mask = np.full_like(galaxy, 1 )
+            mask[:10] = 0
+            mask[-10:] = 0
+            mask[masked_pix[0] : masked_pix[1]] = 0
+            goodPixels.append(np.flatnonzero(mask))
+            masked_pix[0] += 10
+            masked_pix[1] += 10
         print('bootstrap masks done')
     elif mask_skylines:
         skylines = np.array([5199, 5577, 5592])
@@ -184,15 +184,18 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     elif bootstrap:
         # bootstrap_masks: array with different masks with different parts of the spectra masked
         # plan: run fit for each mask in the bootstrap mask array and save results same as with fit
-        deg = 1
-        mdeg = 1
-        res = np.recarray(shape = (len(bootstrap_masks) + 1), # array to store the result for each degree combination in
+        deg = degrees[0]
+        mdeg = degrees[1]
+        res = np.recarray(shape = (len(goodPixels)), # array to store the result for each degree combination in
                 dtype = [('deg', int), ('mdeg', int), ('v', float), ('v_err', float), ('z', float), ('z_err', float), ('sig', float),
                         ('sig_err', float), ('sn_median', float), ('sn_average', float)]) # one for deg, mdeg, v, v_err, redshift, redshift_error, S/N
         i = 0
         for mask in goodPixels:
+            print(mask)
+            print(mask.shape)
+            mask = np.asarray(mask)
             pp = ppxf(templates, galaxy, noise, velscale, start, goodpixels=mask,
-                    moments=2, degree=deg, mdegree=mdeg,
+                    moments=2, degree=deg, mdegree=mdeg, plot=False,
                     lam=np.exp(ln_lam1), lam_temp=np.exp(ln_lam2),
                     velscale_ratio=velscale_ratio)
 
@@ -209,8 +212,6 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
             # fill array with results
             res[i] = (deg, mdeg, vtot, errors[0], redshift_best, redshift_err, pp.sol[1], errors[1], sn_median, sn_average)
             i += 1
-        res[i] = (99, 99, np.average(res['v'][:-1]), np.average(res['v_err'][:-1]), np.average(res['z'][:-1]), np.average(res['z_err'][:-1]),
-                    np.average(res['sig'][:-1]), np.average(res['sig_err'][:-1]), np.average(res['sn_median'][:-1]), np.average(res['sn_average'][:-1]))
     else:
         pp = ppxf(templates, galaxy, noise, velscale, start, goodpixels=goodPixels,
                   plot=False, moments=2, degree=10, mdegree=6,
