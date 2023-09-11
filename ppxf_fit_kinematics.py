@@ -250,7 +250,10 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
                 f.write(str(line))
                 f.write('\n')
     elif bootstrap:
-        fits.writeto(save_as, res, overwrite=True)
+        with open(save_as, 'a') as f:
+            for line in res:
+                f.write(str(line))
+                f.write('\n')
     elif plot_results:
         plot_result(pp, save_as, redshift_best, lamRange1, smoothed_spec=smoothed_spec)
         # plt.savefig(save_as)
