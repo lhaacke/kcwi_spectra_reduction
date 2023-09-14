@@ -207,8 +207,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
             redshift_best = np.exp(vtot/c) - 1          # eq.(8) Cappellari (2017)
             errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
             redshift_err = np.exp(vtot/c)*errors[0]/c   # Error propagation
-            sn_median = np.median(np.sqrt((pp.bestfit/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio median
-            sn_average = np.average(np.sqrt((pp.bestfit/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio average
+            sn_median = np.median(np.sqrt(((pp.bestfit-pp.apoly)/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio median
+            sn_average = np.average(np.sqrt(((pp.bestfit-pp.apoly)/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio average
             # fill array with results
             res[i] = (deg, mdeg, vtot, errors[0], redshift_best, redshift_err, pp.sol[1], errors[1], sn_median, sn_average)
             i += 1
