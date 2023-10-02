@@ -91,7 +91,6 @@ def sigma_rmse(v, v_gal):
 # corner_title = 'mcmc_corner_final_prel.png'
 # walker_title = 'walkers_final_prel.png'
 
-
 # using just bh3l velocity
 # v_obs = np.array([2138.0, 2144.0, 2169.0, 2148.0, 2130.0, 2155.0, 2131.0,
 #                 2176.0, 2143.0, 2220.0, 2132.0, 2130.0, 2164.0, 2180.0, 2094.0,
@@ -104,13 +103,15 @@ def sigma_rmse(v, v_gal):
 
 
 # my velocities for Mueller's GCs
-v_obs = np.array([2147.0, 2149.0, 2173.0, 2148.0, 2130.0, 2155.0,
-                2135.0, 2130.0, 2164.0, 2169.0])
-v_err = np.array([4.0, 6.0, 5.0, 3.0, 6.0, 4.0,
-                5.0, 4.0, 7.0, 6.0])
+v_obs = np.array([2148.0, 2151.0, 2172.0, 2147.0,
+                2171.0, 2130.0, 2156.0, 2133.0,
+                2130.0, 2164.0, 2167.0])
+v_err = np.array([4.0, 7.0, 5.0, 5.0,
+                22.0, 8.0, 6.0, 6.0,
+                7.0, 8.0, 9.0])
 prior_range_sig = (0., 100.)
-corner_title = 'mcmc_corner_final_prel.png'
-walker_title = 'walkers_final_prel.png'
+corner_title = 'mcmc_corner_mueller_gcs.png'
+walker_title = 'walkers_mueller_gcs.png'
 
 
 
@@ -149,14 +150,14 @@ sampler.run_mcmc(pos, nsteps=20000, progress=True)
 
 # make corner plot
 flat_samples = sampler.get_chain(discard=0, thin=15, flat=True)
-np.savetxt('mcmc_chain.txt', flat_samples)
+np.savetxt('../fred/NGC5846_UDG1/mcmc_chain.txt', flat_samples)
 labels = ['v', 'sig']
 fig = corner.corner(flat_samples, quantiles=(0.16, 0.5, 0.84), use_math_text=True, labels=labels, show_titles=True)
 # print 16th, 50th, 84th percentile
 print(np.nanpercentile(flat_samples, 16, axis=0))
 print(np.median(flat_samples, axis=0))
 print(np.nanpercentile(flat_samples, 84, axis=0))
-plt.savefig(''.join(['../', corner_title]))
+plt.savefig(''.join(['../fred/NGC5846_UDG1/', corner_title]))
 plt.close(fig)
 
 # plot walkers
@@ -169,5 +170,5 @@ for i in range(ndim):
     ax.set_ylabel(labels[i])
     ax.yaxis.set_label_coords(-0.1, 0.5)
 axes2[-1].set_xlabel('step number')
-plt.savefig(''.join(['../', walker_title]))
+plt.savefig(''.join(['../fred/NGC5846_UDG1/', walker_title]))
 plt.close(fig2)
