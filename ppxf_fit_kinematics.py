@@ -137,7 +137,7 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
         print('spectrum not cut')
         mask = np.full_like(galaxy, 1)
         mask[:10] = 0
-        mask[460:510]
+        mask[460:510] = 0
         mask[-10:] = 0
         goodPixels = np.flatnonzero(mask)
     print(len(goodPixels))
