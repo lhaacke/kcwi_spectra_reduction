@@ -177,7 +177,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
                 # fill array with results
                 res[i] = (z, deg, mdeg, vtot, errors[0], redshift_best, redshift_err, pp.sol[1], errors[1], sn_median)
                 i += 1
-                if plot_results and (((deg < 3) and (mdeg < 3)) or ((deg > 12) and (mdeg < 3))):
+                # if plot_results and (((deg < 3) and (mdeg < 3)) or ((deg > 12) and (mdeg < 3))):
+                if ((deg == 4) and (mdeg == 4)) or ((deg < 3) and (1 < mdeg < 4)) or ((11 < deg < 14) and (mdeg == 8)):
                     save_plot = '{}_z{}_deg{}_mdeg{}.png'.format(spectrum[:-5], z, deg, mdeg)
                     plot_result(pp, save_plot, redshift_best, lamRange1, smoothed_spec=smoothed_spec)
 
