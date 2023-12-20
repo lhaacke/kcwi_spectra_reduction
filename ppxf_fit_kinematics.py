@@ -16,7 +16,8 @@ def vac_to_air(lam_vac):
     lam_air = lam_vac / (1.0 + 2.735182e-4 + 131.4182 / lam_vac**2 + 2.76249e8 / lam_vac**4)
     return lam_air
 
-def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec=''):
+def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec='',
+        mask_regions=True, mask_pixels=()):
     '''
     currently working for KCWI spectra (and specifically for swinburne or yale observed of NGC5846_UDG1)
     spectrum: fits file with spectrum to fit
@@ -29,6 +30,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
     fit: fit multiple combinations of degree, mdegree
     bootstrap: fit 10 times with 10 different parts of the spectrum masked
     smoothed_spec: smoothed spectrum of same shape as spectrum for plotting
+    mask_regions: mask pixels specified in mask_pixels
+    mask_pixels: tuple of minimum and maximum pixel region to mask
     '''
 
     ppxf_dir = path.dirname(path.realpath(util.__file__))
@@ -104,7 +107,7 @@ def fit_vel_sigma(spectrum, save_as, z, grating, shift_spec=True, cut_spec=False
 
     ############################### MASK PIXELS ############################################
     if mask_line_regions:
-        print('masked except for h_beta')
+        print('masking specified pixel area')
         mask = np.full_like(galaxy, 1)
         h_beta = 4861.35
         # h_beta = h_beta * (1 + redshift)

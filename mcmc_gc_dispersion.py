@@ -56,16 +56,22 @@ def sig_rms():
 # prior_range_sig = (0., 100.)
 
 # mueller's values for Matlas2019 including candidates
-# v_obs = np.array([2156.4, 2162.3, 2138.5, 2130.2, 2133.6, 2147.0, 2147.2, 2157.2, 2163.2, 2179.1, 2177.9, 2134.2, 2184.0, 2184.0])
-# v_err = np.array([5.6, 23.5, 23.3, 13.3, 17.2, 7.8, 5.0, 13.8, 17.7, 13.7, 16.1, 18.9, 12.8, 12.8])
+# v_obs = np.array([2162.3, 2138.5, 2130.2, 2133.6, 2147.0, 2147.2, 2157.2, 2163.2, 2179.1, 2177.9, 2134.2, 2184.0, 2184.0])
+# v_err = np.array([23.5, 23.3, 13.3, 17.2, 7.8, 5.0, 13.8, 17.7, 13.7, 16.1, 18.9, 12.8, 12.8])
 # prior_range_v = (2130., 2179.)
 # prior_range_sig = (0., 100.)
 
 # mueller's values for Matlas2019 excluding candidates
-v_obs = np.array([2156.4, 2162.3, 2138.5, 2130.2, 2133.6, 2147.0, 2147.2, 2157.2, 2163.2, 2179.1, 2177.9, 2134.2])
-v_err = np.array([5.6, 23.5, 23.3, 13.3, 17.2, 7.8, 5.0, 13.8, 17.7, 13.7, 16.1, 18.9])
-prior_range_v = (2130., 2179.)
-prior_range_sig = (0., 100.)
+# v_obs = np.array([2162.3, 2138.5, 2130.2, 2133.6, 2147.0, 2147.2, 2157.2, 2163.2, 2179.1, 2177.9, 2134.2])
+# v_err = np.array([23.5, 23.3, 13.3, 17.2, 7.8, 5.0, 13.8, 17.7, 13.7, 16.1, 18.9])
+# prior_range_v = (2130., 2179.)
+# prior_range_sig = (0., 100.)
+
+# mueller's values for Matlas2019 in common with KCWI
+# v_obs = np.array([2162.3, 2130.2, 2133.6, 2147.0, 2147.2, 2157.2, 2163.2, 2179.1, 2177.9, 2134.2, 2184.0])
+# v_err = np.array([23.5, 13.3, 17.2, 7.8, 5.0, 13.8, 17.7, 13.7, 16.1, 18.9, 12.8])
+# prior_range_v = (2130., 2179.)
+# prior_range_sig = (0., 100.)
 
 
 
@@ -73,7 +79,7 @@ prior_range_sig = (0., 100.)
 nwalkers = 100
 ndim = 2
 v_exp = np.mean(v_obs)
-sig_exp = 9.4
+sig_exp = 17
 
 # get initial values
 np.random.seed(42)
@@ -99,14 +105,14 @@ sampler.run_mcmc(pos, nsteps=20000, progress=True)
 
 # make corner plot
 flat_samples = sampler.get_chain(discard=0, thin=15, flat=True)
-np.savetxt('mcmc_chain.txt', flat_samples)
+# np.savetxt('mcmc_chain.txt', flat_samples)
 labels = ['v', 'sig']
 fig = corner.corner(flat_samples, quantiles=(0.16, 0.5, 0.84), use_math_text=True, labels=labels)
 # print 16th, 50th, 84th percentile
 print(np.nanpercentile(flat_samples, 16, axis=0))
 print(np.median(flat_samples, axis=0))
 print(np.nanpercentile(flat_samples, 84, axis=0))
-plt.savefig('../mcmc_corner_mueller_matlas2019.png')
+plt.savefig('../mcmc_corner_common_gcs_muse.png')
 plt.close(fig)
 
 # plot walkers
@@ -119,5 +125,5 @@ for i in range(ndim):
     ax.set_ylabel(labels[i])
     ax.yaxis.set_label_coords(-0.1, 0.5)
 axes2[-1].set_xlabel('step number')
-plt.savefig('../walkers_mueller_matlas2019.png')
+plt.savefig('../walkers_common_gcs_muse.png')
 plt.close(fig2)
