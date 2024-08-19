@@ -19,13 +19,14 @@ def log_likelihood(theta, v_obs, v_err, fix_v=False):
         chisq = 0.5*(v_obs - 2280)**2/(sig**2 + v_err**2)
     else:
         v_sys, sig = theta
-        pre = np.log(1/(np.sqrt(2*sc.pi*(sig**2 + v_err**2))))
+        # pre = np.log(1/(np.sqrt(2*sc.pi * (sig**2 + v_err**2)) * np.sqrt(sig**2 + v_err**2))) # currently running with Jeffrey's prior
+        pre = np.log(1/(np.sqrt(2*sc.pi * (sig**2 + v_err**2))))
         chisq = 0.5*(v_obs - v_sys)**2/(sig**2 + v_err**2)
 
     return np.sum(pre - chisq)
 
 
-def log_likelihood_1d(theta, v_obs, v_err):
+def log_likelihood_1d(theta, v_obs, v_err, v_gal=1405):
     '''
     theta: tuple of free parameters in the mcmc
     v_obs: array of observed recessional velocities of GCs
@@ -33,7 +34,7 @@ def log_likelihood_1d(theta, v_obs, v_err):
     '''
     sig = theta
     pre = np.log(1/(np.sqrt(2*sc.pi*(sig**2 + v_err**2))))
-    chisq = 0.5*(v_obs - 2280)**2/(sig**2 + v_err**2)
+    chisq = 0.5*(v_obs - v_gal)**2/(sig**2 + v_err**2)
     return np.sum(pre - chisq)
 
 
@@ -126,12 +127,48 @@ def sort_velocities(v_obs, v_err, crit):
 
 
 ##################### run mcmc chain ##################################
-# jonah vcc1448
-# v_obs = np.array([2335, 2274, 2288, 2283, 2342, 2317, 2287, 2325, 2320, 2292])
-# v_err = np.array([2,3,6,5,3,2,1,8,7,4])
-# prior_range_v = (2274., 2335.)
-# prior_range_sig = (0., 100.)
+# DF4 from vDokkum+ 19 (checking for Aaron)
+# v_obs = np.array([1441.2, 1451.0, 1457.1, 1445.4, 1438.4, 1445.5, 1445.1])
+# v_err_list = [np.mean([4.9, 4.8]), np.mean([3.6, 3.3]), np.mean([4.6, 5.5]), np.mean([2.6, 2.3]),
+#                 np.mean([4.8, 4.6]), np.mean([4.0, 4.1]), np.mean([5.0, 5.2])]
+# v_err = np.asarray(v_err_list)
+# prior_range_sig = (0.5, 100.)
+# sig_exp = np.std(v_obs)
+# mode = '2D'
+# corner_title = 'mcmc_corner_DF4_vD19.png'
+# walker_title = 'walkers_DF_4_vD19.png'
 
+
+# Luisa Fcc224
+# v_obs = np.array([1393.1476364720424,1395.958777322389,1385.248337870062,1415.8268461629552,1413.831924529464])
+# v_err = np.array([7.23431586,16.7156149,15.14155362, 5.71065219,6.79414374])
+# prior_range_sig = (0., 100.)
+# sig_exp = np.std(v_obs)
+# mode = '1D'
+# corner_title = 'mcmc_corner_Luisa.png'
+# walker_title = 'walkers_Luisa.png'
+
+
+# # Jonah GC recessional velocities, 29.04.2024
+# v_obs = np.array([2335, 2274, 2288, 2283, 2342, 2317, 2287, 2325, 2320, 2292 - 9.815]) - 1.17 # km/s the -9.815 is to put in the BH grating
+# v_err = np.sqrt(np.array([2,3,6,5,3,2,1,8,7,4])**2 + 6 **2) # km/s
+# prior_range_sig = (0., 100.)
+# sig_exp = np.std(v_obs) # to start with the velocity dispersion from rmse formula
+# corner_title = '240429_mcmc_corner_jonah_velocities.png'
+# walker_title = '240429_walkers_jonah_velocities.png'
+# hist_title = '240429_mcmc_sig_distr_jonah.png'
+# mode = '2D'
+
+# Jonah & Toloba GC recessional velocities, 29.04.2024
+v_obs = np.array([2333.83 , 2272.83 , 2286.83 , 2281.83 , 2340.83 , 2315.83 , 2285.83 , 2323.83 , 2318.83 , 2281.015, 2270.94, 2347.72, 2380.78, 2297.78, 2244.81, 2367.27, 2279.])
+v_err = np.array([ 6.32455532,  6.70820393,  8.48528137,  7.81024968,  6.70820393,
+        6.32455532,  6.08276253, 10.,  9.21954446,  7.21110255,  6.18,  7.18, 11.42,  8.76,  17.08,  8.47,  8.07])
+prior_range_sig = (0., 100.)
+sig_exp = np.std(v_obs) # to start with the velocity dispersion from rmse formula
+corner_title = '240429_mcmc_corner_jonah_toloba_velocities.png'
+walker_title = '240429_walkers_jonah_toloba_velocities.png'
+hist_title = '240429_mcmc_sig_distr_jonah.png'
+mode = '2D'
 
 # Jonah GC recessional velocities:
 # v_obs = np.array([2333.83, 2272.83, 2286.83, 2281.83,
@@ -143,14 +180,14 @@ def sort_velocities(v_obs, v_err, crit):
 # walker_title = 'walkers_jonah_velocities.png'
 # hist_title = 'mcmc_sig_distr_jonah.png'
 
-# more Jonah velocities - within halflight radius
-v_obs = np.array([2272.83 , 2281.83 , 2340.83 , 2315.83 , 2285.83 , 2323.83 , 2318.83 , 2281.015, 2297.78, 2244.81])
-v_err = np.array([ 3,  5, 3, 2, 1, 8, 7, 4,  8.76,  17.08,])
-prior_range_sig = (0., 100.)
-mode = '2D'
-corner_title = 'mcmc_corner_jonah_halflight.png'
-walker_title = 'walkers_jonah_halflight.png'
-# hist_title = 'mcmc_sig_distr_jonah_halflight.png'
+# # more Jonah velocities - within halflight radius
+# v_obs = np.array([2272.83 , 2281.83 , 2340.83 , 2315.83 , 2285.83 , 2323.83 , 2318.83 , 2281.015, 2297.78, 2244.81])
+# v_err = np.array([ 3,  5, 3, 2, 1, 8, 7, 4,  8.76,  17.08,])
+# prior_range_sig = (0., 100.)
+# mode = '2D'
+# corner_title = 'mcmc_corner_jonah_halflight.png'
+# walker_title = 'walkers_jonah_halflight.png'
+# # hist_title = 'mcmc_sig_distr_jonah_halflight.png'
 
 # Toloba's GC recessional velocities:
 # v_obs = np.array([2270.94, 2347.72, 2380.78, 2297.78,
@@ -246,7 +283,6 @@ if mode == '2D':
     ndim = 2
     v_exp = np.mean(v_obs)
     # sig_exp = sigma_rmse(v_obs, 2167) # to start with the velocity dispersion from rmse formula
-    sig_exp = 26 # to start with stellar sigma
     prior_range_v = (np.min(v_obs), np.max(v_obs))
 
     # get initial values

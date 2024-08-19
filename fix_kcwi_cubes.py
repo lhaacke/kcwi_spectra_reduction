@@ -36,6 +36,7 @@ class Manipulate_icubes:
 
     def cut_cubes(self):
         '''
+        Cuts overhang pixels and bad wavelengths off of cubes
         cube_path: path to cubes that need to be cut
         cube_dict: dictionary with info on cubes (pixels to be included)
         '''
