@@ -87,6 +87,7 @@ class Manipulate_icubes:
     def compare_central_wavelengths(self, cut_suff='/*icubes_cut.fits'):
         '''
         checks if all the central wavelengths are the same
+        cubes are saved as their exising name (without file extension) with cut_suff appended
         '''
         # get all the cubes in gradient corrected folder  
         cubes = glob.glob(''.join([self.cut_cubes_path, cut_suff]))

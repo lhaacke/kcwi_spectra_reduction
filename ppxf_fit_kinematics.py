@@ -215,18 +215,18 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
             i += 1
     else:
         pp = ppxf(templates, galaxy, noise, velscale, start, goodpixels=goodPixels,
-                  plot=False, moments=2, degree=10, mdegree=6,
+                  plot=False, moments=2, degree=4, mdegree=4,
                   lam=np.exp(ln_lam1), lam_temp=np.exp(ln_lam2),
                   velscale_ratio=velscale_ratio)
 
         # The updated best-fitting redshift is given by the following
         # lines (using equation 8 of Cappellari 2017, MNRAS)
         vcosm = c*np.log(1 + redshift_0)            # This is the initial redshift estimate
-        print(vcosm)
+        # print(vcosm)
         vpec = pp.sol[0]                            # This is the fitted residual velocity
-        print(vpec)
+        # print(vpec)
         vtot = vcosm + vpec                         # I add the two velocities before computing z
-        print(vtot)
+        print('Best fit velocity', vtot)
         if shift_spec:
             redshift_best = np.exp(vtot/c) - 1          # eq.(8) Cappellari (2017)
             errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
@@ -243,7 +243,8 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
         print('Elapsed time in pPXF: %.2f s' % (clock() - t))
         print(f"Best-fitting redshift z = {redshift_best:#.7f} "
             f"+/- {redshift_err:#.2g}")
-        print(sn)
+        print('S/N', sn)
+        print('sigma', pp.sol[1], '+-', errors[1])
 
     if fit:
         with open(save_as, 'a') as f:
@@ -280,8 +281,8 @@ def plot_result(pp, save_as, z_best, lamRange1, spec=True, shift_z=True, smoothe
     # Plot observed spectrum
     if spec:
         ll, rr = np.min(x), np.max(x)
-        print(ll)
-        print(rr)
+        # print(ll)
+        # print(rr)
         resid = pp.galaxy - pp.bestfit
         bestfit = pp.bestfit
         sig3 = np.percentile(abs(resid[pp.goodpixels]), 99.73)

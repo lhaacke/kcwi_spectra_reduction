@@ -168,23 +168,23 @@ def fix_hdr(cube_new, cube_orig):
 
 
 # input
-# bh3l
-path = '../stacked_cubes_spectra/bh3l_cut_cubes/old/wcs_corrected/reproj_posang'
-file_list = glob.glob(''.join([path, '/', '*_wcscorr.fits']))
-# print(file_list)
-stacked_name = 'NGC5846_UDG1_BH3L_mosaic'
+# # bh3l
+# path = '../stacked_cubes_spectra/bh3l_cut_cubes/old/wcs_corrected/reproj_posang'
+# file_list = glob.glob(''.join([path, '/', '*_wcscorr.fits']))
+# # print(file_list)
+# stacked_name = 'NGC5846_UDG1_BH3L_mosaic'
 
-# # check if all the central wavelengths are the same
-compare_central_wavelengths(file_list)
+# # # check if all the central wavelengths are the same
+# compare_central_wavelengths(file_list)
 
-# # stack the cubes
-stack_cubes(path, file_list, stacked_name)
+# # # stack the cubes
+# stack_cubes(path, file_list, stacked_name)
 
-# fix the header of the resulting stack of cubes
-new_cube = ''.join([path, '/reproj/', stacked_name, '.fits'])
-orig_cube = file_list[0]
-fix_hdr(new_cube, orig_cube)
+# # fix the header of the resulting stack of cubes
+# new_cube = ''.join([path, '/reproj/', stacked_name, '.fits'])
+# orig_cube = file_list[0]
+# fix_hdr(new_cube, orig_cube)
 
-# fix the header of the wcscorr cubes
-new_cube = ''.join([path,'/reproj/',  ])
+# # fix the header of the wcscorr cubes
+# new_cube = ''.join([path,'/reproj/',  ])
 
