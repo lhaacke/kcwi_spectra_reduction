@@ -36,9 +36,16 @@ class Manipulate_icubes:
 
     def cut_cubes(self):
         '''
-        Cuts overhang pixels and bad wavelengths off of cubes
-        cube_path: path to cubes that need to be cut
-        cube_dict: dictionary with info on cubes (pixels to be included)
+        Cuts overhang pixels and bad wavelengths from FITS data cubes.
+        Uses class attributes.
+
+        Returns:
+        -----------
+        int: Status code (0 on successful completion).
+
+        Notes:
+        -----------
+        Creates output directory if it doesn't exist.
         '''
         # check if the directory for the cut cubes is there
         # make cut cube directory if it is not
@@ -86,8 +93,29 @@ class Manipulate_icubes:
 
     def compare_central_wavelengths(self, cut_suff='/*icubes_cut.fits'):
         '''
-        checks if all the central wavelengths are the same
-        cubes are saved as their exising name (without file extension) with cut_suff appended
+        Compare central wavelengths across FITS cubes.
+
+        Parameters
+        ----------
+        cut_suff : str, optional
+            Suffix pattern to identify cube files. Default is '/*icubes_cut.fits'.
+            Used to glob files in self.cut_cubes_path.
+        
+        Returns
+        -------
+        int
+            Returns 0 on successful completion.
+        
+        Raises
+        ------
+        SystemExit
+            If the difference in central wavelengths between any cube and the reference
+            exceeds ±1 Angstrom.
+
+        Notes
+        -----
+        Only use this if you don't expect more than ~1 AA offset in central lambda.
+        Sensitivity changes with central wavelength and otherwise you really should take that into consideration.
         '''
         # get all the cubes in gradient corrected folder  
         cubes = glob.glob(''.join([self.cut_cubes_path, cut_suff]))
@@ -107,6 +135,9 @@ class Manipulate_icubes:
                 elif (h1['CRVAL3'] > (crval+1)) or (h1['CRVAL3'] < (crval-1)):
                     sys.exit('Difference in central wavelengths too big')
                 else:
+                    # this is actually a bad idea, unless you want to only get recessional v
+                    # and don't mind the fact that sensitivity changes with central wavelength
+                    # depending on observing settings
                     hdu[0].header['CRVAL3'] = crval
                     hdu[0].header['CRPIX3'] = crpix
         return 0
@@ -114,11 +145,21 @@ class Manipulate_icubes:
 
     def add_var_wcs_header(self, var_header, data_header, key):
         '''
-        adds necessary keywords to variance cube header to 'have' a wcs and be rebinned according to it
+        Add mostly WCS related header to variance cube.
         
-        var_header: header of variance cube
-        data_header: header of corresponding data cube
-        key: kbyymmdd_xxxxx style name of the exposure
+        Parameters
+        ----------
+        var_header : astropy.io.fits.Header
+            Header object of the variance cube to be updated with WCS information.
+        data_header : astropy.io.fits.Header
+            Header object of the corresponding data cube containing reference WCS keywords.
+        key : str
+            Exposure identifier in 'kbyymmdd_xxxxx' format used to access calibration data from self.cube_dict.
+        
+        Returns
+        -------
+        astropy.io.fits.Header
+            The updated variance cube header with WCS keywords added.
         '''
         # add necessary keywords to variance cube to 'add' a wcs
         var_header['CRPIX1'] = self.cube_dict[key]['xpix']
@@ -154,7 +195,25 @@ class Manipulate_icubes:
 
     def gradient_correction(self, cut_suff='/*icubes_cut.fits'):
         '''
-        cut_cube_path: path where to find the cut icubes that need to be corrected
+        Applies gradient correction to KCWI data cubes along the x-axis.
+        (Because there's a natural gradient across the IFU)
+       
+        Parameters
+        ----------
+        cut_suff : str, optional
+            Glob pattern suffix for identifying cut cubes to process. 
+            Default is '/*icubes_cut.fits'.
+        
+        Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+        
+        Notes
+        -----
+        Creates output directories if they do not exist:
+          - self.data_gradient_corrected_path for corrected data cubes
+          - self.var_gradient_corrected_path for corrected variance cubes
         '''
         # check if gradient_corrected path exists or not
         if not os.path.exists(self.data_gradient_corrected_path):
@@ -193,8 +252,31 @@ class Manipulate_icubes:
     
     def join_cubes(self, data_path, var_path, joint_path, cut_suff):
         '''
-        joins data and variance cube after rebinning
-        takes cubes from self.data_rebinned_path and self.var_rebinned_path
+        Joins data and variance FITS cubes into a single HDU list after rebinning.
+        Reads rebinned data and variance cubes from separate directories, combines them
+        into a single FITS file with data in the primary HDU and variance in an image HDU,
+        and writes the combined cubes to the joint output directory.
+        
+        Parameters
+        ----------
+        data_path : str
+            Path to directory containing rebinned data cubes.
+        var_path : str
+            Path to directory containing rebinned variance cubes.
+        joint_path : str
+            Path to output directory where combined cubes will be saved (created if not existing).
+        cut_suff : str
+            Glob pattern suffix to match cube filenames (e.g., '/*.fits').
+        
+        Returns
+        -------
+        int
+            Returns 0 on successful completion.
+        
+        Notes
+        -----
+        Data and variance cubes must have matching names.
+        Overwrites existing output files.
         '''
         # check if joint path exists
         if not os.path.exists(joint_path):
@@ -267,7 +349,27 @@ class Manipulate_icubes:
 
     def wcs_correction(self, cut_suff='/*gradient_corrected.fits'):
         '''
-        corrects the wcs system according to the pixel values in self.cube_dict
+        Correct the WCS (World Coordinate System) system for FITS cubes based on pixel values.
+
+        Parameters
+        ----------
+        cut_suff : str, optional
+            Glob pattern suffix for identifying input FITS files.
+            Default is '/*gradient_corrected.fits'
+        
+        Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+        
+        Raises
+        ------
+        SystemExit
+            If data and variance cube keys do not match during processing.
+        
+        Notes
+        -----
+        Creates output directories if they do not exist.
         '''
         # check data, var_wcs_corrected directories exist
         # make them if not
@@ -323,11 +425,35 @@ class Manipulate_icubes:
 
 
     def rebin_cubes(self, header=True, cut_suff='/*wcs_corrected.fits'):
-        '''
-        rebin the cubes from rectangular to square pixels
+        """
+        Rebin KCWI data and variance cubes to a common WCS grid using Montage.
 
-        header: whether or not to return the header from get_area_ratio
-        '''
+        Parameters
+        ----------
+        header : bool, optional
+            If True, preserves original header information and fixes headers in rebinned 
+            cubes. If False, skips header preservation. Default is True.
+        cut_suff : str, optional
+            Glob pattern suffix to identify WCS-corrected cube files. 
+            Default is '/*wcs_corrected.fits'.
+       
+         Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+        
+        Notes
+        -----
+        Based on montagepy using mImgtbl, mMakeHdr, and mProjectCube functions for rebinning
+        author confused by the join cubes bit in the end, don't think that's necessary
+        will create joint variance and data cubes where each is an extension
+        
+        Raises
+        ------
+        SystemExit
+            If data cube cannot be matched to corresponding variance cube.
+        """
+        
         # check if the directories for rebinned cubes exist
         # make if they don't
         if not os.path.exists(self.data_rebinned_path):
@@ -337,15 +463,11 @@ class Manipulate_icubes:
             
         # Montage pre-processing for data and var separately
         imlist_data = mImgtbl(self.data_wcs_corrected_path, ''.join([self.data_rebinned_path, '/icubes.tbl']), showCorners=True)
-        print(imlist_data)
         imlist_var = mImgtbl(self.var_wcs_corrected_path, ''.join([self.var_rebinned_path, '/icubes.tbl']), showCorners=True)
-        print(imlist_var)
 
         # use mMakeHdr
         hdr_temp_data = mMakeHdr(''.join([self.data_rebinned_path, '/icubes.tbl']), ''.join([self.data_rebinned_path, '/icubes.hdr']))
-        print(hdr_temp_data)
         hdr_temp_var = mMakeHdr(''.join([self.var_rebinned_path, '/icubes.tbl']), ''.join([self.var_rebinned_path, '/icubes.hdr']))
-        print(hdr_temp_var)
 
         # rebin cubes
         data_cubes = np.sort(glob.glob(''.join([self.data_wcs_corrected_path, cut_suff])))
@@ -376,26 +498,35 @@ class Manipulate_icubes:
                 self.fix_rebinned_hdr(''.join([self.data_rebinned_path, '/', data_key, '_reproj.fits']), orig_header_data)
                 self.fix_rebinned_hdr(''.join([self.var_rebinned_path, '/', var_key, '_reproj.fits']), orig_header_var)
 
-            print(rep_cube_data)
-            print(rep_cube_var)
-
         # fix the header of rebinned cubes
 
         return 0
 
 
         # join cubes
-        self.join_cubes(self.data_rebinned_path, self.var_rebinned_path,
-                        self.rebinned_path, '/*reproj.fits')
+        # self.join_cubes(self.data_rebinned_path, self.var_rebinned_path,
+        #                 self.rebinned_path, '/*reproj.fits')
 
-        return 0
+        # return 0
 
 
     def stack_cubes(self, stacked_cubes_name):
         '''
-        stacks all rebinned cubes in self.rebinned_cubes_path
+        Stack all rebinned data and variance cubes into single FITS files.
 
-        stacked_cubes_name: filename of the stacked cubes fits file (e.g. 'stacked.fits')
+        Parameters
+        ----------
+        stacked_cubes_name : str
+            Filename of the output stacked cubes FITS file (e.g., 'stacked.fits').
+        
+        Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+        
+        Notes
+        -----
+        commenting in join_cubes will create joint data and variance file
         '''
         # create image metadata table for reprojected data cubes
         im_meta_data = mImgtbl(self.data_rebinned_path,
@@ -436,6 +567,45 @@ class Manipulate_icubes:
 
 
     def fix_stacked_hdr(self, cube, hdr0):
+        """
+        Fix and synchronize header keywords of a stacked FITS cube.
+
+        This method updates specific header keywords in a stacked data cube FITS file
+        by copying corresponding values from a reference header. It ensures that the
+        stacked cube contains all necessary wavelength and unit-related metadata.
+
+        Parameters
+        ----------
+        cube : str
+            Filepath to the stacked FITS cube file to be updated.
+        hdr0 : astropy.io.fits.Header
+            Reference header object containing source keyword values.
+
+        Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+
+        Notes
+        -----
+        The method updates the following header keywords in the stacked cube:
+        - CUNIT3, CTYPE3: Wavelength axis unit and type information
+        - WAVALL0, WAVALL1: Wavelength coverage range
+        - CDELT3: Wavelength pixel scale (copied from CD3_3)
+        - WAVGOOD0, WAVGOOD1: Valid wavelength range
+        - BUNIT: Brightness unit of the data
+
+        The file is opened in 'update' mode to preserve other header information
+        while modifying only the specified keywords.
+
+        Examples
+        --------
+        >>> from astropy.io import fits
+        >>> hdr_ref = fits.getheader('reference_cube.fits')
+        >>> fixer = CubeFixerClass()  # Assuming this method belongs to a class
+        >>> fixer.fix_stacked_hdr('stacked_cube.fits', hdr_ref)
+        0
+        """
         '''
         add all necessary keywords to header of stacked cube
         '''
