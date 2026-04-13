@@ -1,6 +1,9 @@
 # kcwi_spectra_reduction
 Semi-automatic code to rebin and extract spectra from KCWI cubes
 
+# Warning
+ppxf/mcmc files are ancient remnants, don't use
+
 # Use
 Run based on an input file which contains dictionary-style information on the data cubes to be combined. Keywords needed:
 
