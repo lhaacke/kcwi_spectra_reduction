@@ -1,5 +1,5 @@
 # kcwi_spectra_reduction
-Semi-automatic pipeline to extract and process spectra from KCWI cubes
+Semi-automatic code to rebin and extract spectra from KCWI cubes
 
 # Use
 Run based on an input file which contains dictionary-style information on the data cubes to be combined. Keywords needed:
