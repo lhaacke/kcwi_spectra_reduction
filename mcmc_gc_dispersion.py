@@ -113,14 +113,3 @@ def run_mcmc(v_obs, v_err, prior_range_v, prior_range_sig, sig_exp, nwalkers=100
     v_84, sig_84 = vals_84[0], vals_84[1]
 
     return ((v_16, v_50, v_84), (sig_16, sig_50, sig_84))
-
-
-def sort_velocities(v_obs, v_err, crit):
-    '''
-    returns velocities sorted by criteria array
-    v_obs: observed velocities
-    v_err: errors associated with v_obs
-    crit: criteria by which to sort v_obs and v_err (e.g. radius, magnitude,...)
-    '''
-
-    return v_obs_sorted, v_err_sorted
