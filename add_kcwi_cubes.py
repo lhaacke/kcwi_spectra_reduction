@@ -3,54 +3,105 @@ Lydia Haacke
 05/2023
 '''
 import glob
+import sys
 from astropy.io import fits
 from MontagePy.main import *
 
 ########################## FUNCTIONS #########################################
 def compare_central_wavelengths(file_list):
     '''
-    checks if all the central wavelengths are the same
+    Compare central wavelengths across multiple FITS files.
+    Does not automatically fix wavelengths.
+
+    Parameters
+    ----------
+    file_list : list
+        list of file paths (to FITS files) to be compared.
+
+    Returns
+    -------
+    int
+        Returns 0 upon successful completion.
+
+    Notes
+    -----
+    - Files are opened in 'update' mode to allow modifications to headers, but doesn't currently update anything.
+    - CRVAL3 is the central wavelength value (wavelength units).
+    - CRPIX3 is the reference pixel for the wavelength axis.
     '''
     # get the central wavelength of one cube as reference
     with fits.open(file_list[0]) as hdu:
         crval = hdu[0].header['CRVAL3']
         crpix = hdu[0].header['CRPIX3']
-        print(crval)
     # compare the central wavelengths for each file, change if slightly different
-    print(file_list)
     for file in file_list:
         with fits.open(file, 'update') as hdu:
             h1 = hdu[0].header
             if h1['CRVAL3'] == crval:
                 continue
             else:
-                hdu[0].header['CRVAL3'] = crval
-                hdu[0].header['CRPIX3'] = crpix
-                # sys.exit('Central wavelengths do not match.')
+                # hdu[0].header['CRVAL3'] = crval
+                # hdu[0].header['CRPIX3'] = crpix
+                sys.exit('Central wavelengths do not match.')
     return 0
 
 
 def get_area_ratio(file):
     '''
-    calculate the area ratio of data cube pixels
-    file: path to one of the fits files
+    Calculate the area ratio of data cube pixels.
+
+    This function computes the ratio between the slice scale (SLSCL) and pixel scale (PXSCL)
+    from the FITS file header. This ratio represents how the physical area of a slice
+    compares to the area of a single pixel in the data cube.
+
+    Parameters
+    ----------
+    file : str
+        Path to a FITS file containing the data cube.
+
+    Returns
+    -------
+    float
+        The area ratio calculated as SLSCL / PXSCL.
+
+    Notes
+    -----
+    Requires the 'SLSCL' and 'PXSCL' keywords in primary HDU header
     '''
     with fits.open(file) as hdu:
         h1 = hdu[0].header
         ratio = h1['SLSCL']/h1['PXSCL']
-    # with fits.open(file) as hdu:
-    #     h1 = hdu[0].header
-    #     ratio = h1['PXSCL']/h1['SLSCL']
     return ratio
 
 
 def stack_cubes(path, file_list, output_name):
     '''
-    reproject KCWI cubes onto a square pixel grid, flux preserving
-    cubes should be cut and gradient corrected
+    Stack and reproject KCWI data cubes onto a common pixel grid (does bulk of the whole purpose).
+    Reprojects data cubes onto a square pixel grid (flux preserving), then combines them into a final mosaic.
+    Input cubes should be pre-processed (cut and gradient corrected).
 
-    path: path to directory containing cubes
-    file_list: list of cubes to reproject and stack
+    Parameters
+    ----------
+    path : str
+        Path to directory containing the cubes and subdirectories 
+        ('/reproj' subdirectory will be used for intermediate and output files)
+    file_list : list of str
+        List of file paths to KCWI cubes to reproject and stack
+    output_name : str
+        Name for the output stacked cube file (without .fits extension)
+
+    Returns
+    -------
+    int
+        Returns 0 on successful completion
+
+    Notes
+    -----
+    - Requires 'reproj' subdirectory in path for storing reprojected cubes
+    - Input cubes should be pre-processed (cut and gradient corrected)
+    - Uses Montage mImgtbl, mMakeHdr, mProjectCube, and mAddCube functions
+    - Path indexing is configured for specific KCWI file naming conventions
+    - Output file saved to: {path}/reproj/{output_name}.fits
     '''
     # original instructions:
     # Create a directory to hold the reprojected images: $ mkdir proj-narrow
@@ -118,12 +169,27 @@ def stack_cubes(path, file_list, output_name):
 
 def fix_hdr(cube_new, cube_orig):
     '''
-    add necessary keywords to stacked cubes' header
-    (heavily based on Nikki Nielsen's function)
+    Copy missing keywords from old to new cube (montagepy drops some!!)
+
+    Parameters
+    ----------
+    cube_new : str
+        File path to the new stacked FITS cube whose header will be updated.
+    cube_orig : str
+        File path to the original FITS cube from which header keywords will be copied.
+
+    Returns
+    -------
+    int
+        Returns 0 upon successful completion.
+
+    Notes
+    -----
+    The new cube file is opened in 'update' mode and modified in-place.
+    Without this code will not recognise that the file is 3 dimensional
     '''
     with fits.open(cube_orig) as hdrorig:
         hdr0 = hdrorig[0].header
-        print(hdr0['CRVAL3'])
         with fits.open(cube_new, 'update') as hdr1:
                 hdr1[0].header['WAVALL0'] = hdr0['WAVALL0']
                 hdr1[0].header['WAVALL1'] = hdr0['WAVALL1']
@@ -136,21 +202,18 @@ def fix_hdr(cube_new, cube_orig):
                 hdr1[0].header['CDELT3'] = hdr0['CD3_3']
                 hdr1[0].header['BUNIT'] = hdr0['BUNIT']
 
-    # newcube = fits.PrimaryHDU(cube_new,hdr1[0].header)
-    # newcube.writeto(cube_new,overwrite=True)
-
     return 0
 
 
 ############################## RUN ########################################
-# !!! 
+# !!! possibly very outdated
 
 # # input
 # # bh3m
-# path = '../stacked_cubes_spectra/bh3m_cut_cubes/wcs_corrected'
+# path = 'path_to_wcs_corrected_cubes'
 # file_list = glob.glob(''.join([path, '/', '*_wcscorr.fits']))
 # # print(file_list)
-# stacked_name = 'NGC5846_UDG1_BH3M_mosaic_invratio'
+# stacked_name = 'stacked_cube_name'
 
 # # # check if all the central wavelengths are the same
 # compare_central_wavelengths(file_list)
@@ -166,25 +229,4 @@ def fix_hdr(cube_new, cube_orig):
 # # fix the header of the wcscorr cubes
 # new_cube = ''.join([path,'/reproj/',  ])
 
-
-# input
-# # bh3l
-# path = '../stacked_cubes_spectra/bh3l_cut_cubes/old/wcs_corrected/reproj_posang'
-# file_list = glob.glob(''.join([path, '/', '*_wcscorr.fits']))
-# # print(file_list)
-# stacked_name = 'NGC5846_UDG1_BH3L_mosaic'
-
-# # # check if all the central wavelengths are the same
-# compare_central_wavelengths(file_list)
-
-# # # stack the cubes
-# stack_cubes(path, file_list, stacked_name)
-
-# # fix the header of the resulting stack of cubes
-# new_cube = ''.join([path, '/reproj/', stacked_name, '.fits'])
-# orig_cube = file_list[0]
-# fix_hdr(new_cube, orig_cube)
-
-# # fix the header of the wcscorr cubes
-# new_cube = ''.join([path,'/reproj/',  ])
 
