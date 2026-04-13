@@ -11,6 +11,8 @@ import numpy as np
 from ppxf.ppxf import ppxf
 import ppxf.ppxf_util as util
 
+######## NOTE: not actually used, probably also don't use in general ###########
+
 def vac_to_air(lam_vac):
     # IAU standard: AIR = VAC / (1.0 + 2.735182E-4 + 131.4182 / VAC^2 + 2.76249E8 / VAC^4)
     lam_air = lam_vac / (1.0 + 2.735182e-4 + 131.4182 / lam_vac**2 + 2.76249e8 / lam_vac**4)
