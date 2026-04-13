@@ -46,7 +46,28 @@ class ExtractSpectra:
     
     def get_masks_from_regions(self, regions, sky_regions):
         '''
-        returns a list of masks based on the regions file provided
+        Generate aperture masks from region objects.
+
+        Parameters
+        ----------
+        regions : list of region objects
+            List of sky region objects defining science apertures.
+        sky_regions : list of region objects
+            List of sky region objects defining background apertures corresponding to regions
+        
+        Returns
+        -------
+        masks : list of AperturePixelMask
+            List of pixel-space aperture masks corresponding to the science
+            regions, using exact pixel method.
+        sky_masks : list of AperturePixelMask
+            List of pixel-space aperture masks corresponding to the sky regions,
+            using exact pixel method for background estimation.
+
+        Notes
+        -----
+        Uses 'exact' method for mask creation
+        Regions and sky_regions must be in the same order for correct subtraction
         '''
         masks = [] # list of all the masks to be returned
         sky_masks = [] # list of corresponding sky masks
@@ -67,11 +88,21 @@ class ExtractSpectra:
     
     def write_spectrum_header(self, spec_header, data_header, comment=''):
         '''
-        updates the header of the spectrum fits file with all necessary keywords
+        Updates the header of a spectrum FITS file with all necessary keywords.
+ 
+        Parameters
+        ----------
+        spec_header : astropy.io.fits.Header
+            Header object of the spectrum FITS file to be updated.
+        spec_header : astropy.io.fits.Header
+            Header object containing necessary information
+        comment : str, optional
+            Comment string to be added to the spectrum header. Default is empty string.
         
-        spec_header: header of the spectrum
-        data_header: header that contains necessary information
-                     default to the header of the data cube the spectrum is taken from
+        Returns
+        -------
+        astropy.io.fits.Header
+            Updated spectrum header with wavelength calibration and metadata keywords.
         '''
         spec_header['NAXIS'] = 1
         spec_header['NAXIS1'] = data_header['NAXIS3']
@@ -94,9 +125,35 @@ class ExtractSpectra:
     
     def sky_subtract(self, spec, header, cube, sky_mask, mode='median'):
         '''
-        extracts a sky spectrum and subtracts it from spec
+        Extracts a sky spectrum from a cube using a sky mask and subtracts it from given spectrum.
         
-        spec: spectrum to subtract the sky spectrum from
+        Parameters
+        ----------
+        spec : ndarray
+            The spectrum to subtract the sky spectrum from. Shape should be (NAXIS3,).
+        header : dict
+            FITS header containing 'NAXIS3' key specifying the number of wavelength channels.
+        cube : ndarray
+            3D data cube with shape (NAXIS3, height, width) from which sky spectrum is extracted.
+        sky_mask : object
+            mask object
+        mode : str, optional
+            Method for combining sky pixels. Default to median option. See notes for sum option.
+        
+        Returns
+        -------
+        sky_subtracted_spec : ndarray
+            Sky-subtracted spectrum with shape (NAXIS3,).
+        
+        Raises
+        ------
+        SystemExit
+            If an unknown mode is provided.
+
+        Notes
+        -----
+        Naive, non-weighted spectrum summing. Do not recommend using unedited
+        Also naive sky subtraction
         '''
         sky_spec = np.zeros(header['NAXIS3']) # initialise spectrum
         # apply the sky mask
@@ -105,7 +162,7 @@ class ExtractSpectra:
                 sky_spec[i] = np.median(sky_mask.get_values(cube[i,:,:]))
         elif mode=='sum':
             for i in range(header['NAXIS3']):
-                sky_spec[i] = np.median(sky_mask.get_values(cube[i,:,:]))
+                sky_spec[i] = np.sum(sky_mask.get_values(cube[i,:,:]))
         else:
             sys.exit('Unknown method of combining pixels.')
         
@@ -117,10 +174,31 @@ class ExtractSpectra:
     
     def extract_spectra(self, sky_subtract=True, plot=True):
         '''
-        extracts spectrum from specified regions and save it as fits in a folder
+        Extracts spectra from specified regions and saves them as FITS files.
+
+        Parameters
+        ----------
+        sky_subtract : bool, optional
+            If True, extracted spectra will be locally sky subtracted before saving.
+        plot : bool, optional
+            If True, generates diagnostic plots showing the cube image, mask, and sky mask for sanity checking.
         
-        sky_subtract (Bool): saved spectra will be locally sky subtracted if true
-        plot (Bool): plot image of the cube, mask and sky mask as sanity check
+        Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+        
+        Notes
+        -----
+        Creates output directories if they don't exist (data_spectra_path, var_spectra_path)
+
+        Output Files
+        ------------
+        For each region i, saves:
+        - {data_spectra_path}/gc{i}_spectrum_median.fits
+        - {data_spectra_path}/gc{i}_spectrum_sum.fits
+        - {var_spectra_path}/gc{i}_spectrum_median.fits
+        - {var_spectra_path}/gc{i}_spectrum_sum.fits
         '''
         if not os.path.exists(self.data_spectra_path):
             os.mkdir(self.data_spectra_path)
@@ -213,13 +291,33 @@ class ExtractSpectra:
     
         
     def plot_apertures(self, cube, var_cube, mask_im, sky_mask_im, i=''):
-        '''
-        plots the median image of the data cube, applied mask, applied sky aperture
+        """
+        Plot and save aperture masks and variance cubes for spectral extraction visualization.
 
-        cube (bool): include median image of the original data cube if True
-        mask (bool): include image of the aperture from which spectra are extracted if True
-        sky (bool): include image of sky area from which sky spectra is extracted if True
-        '''
+        Parameters
+        ----------
+        cube : ndarray
+            3D data cube with shape (wavelength, y, x).
+        var_cube : ndarray
+            3D variance cube with the same shape as `cube`.
+        mask_im : ndarray
+            2D binary mask image indicating aperture/extraction regions.
+        sky_mask_im : ndarray
+            2D binary mask image indicating sky regions for background subtraction.
+        i : str, optional
+            Identifier string appended to the output filename for tracking. Default empty.
+        
+        Returns
+        -------
+        int
+            Returns 0 upon successful completion.
+       
+         Notes
+        -----
+        Creates the plot directory (`self.plot_path`) if it does not exist.
+        Output filename format: `gc{i}_extraction_mask.png`
+        """
+        
         if not os.path.exists(self.plot_path):
             os.mkdir(self.plot_path)
         
@@ -239,6 +337,11 @@ class ExtractSpectra:
 
 
 class Noise:
+    '''
+    Note: do not recomment using this.
+    fabada leaves behind nans in spectrum and there is currently no way implemented to approximate the values
+
+    '''
     def __init__(self, cube_path, spec_ending, noise_spec_ending):
         '''
         cube_path (string): path to stacked data and variance cube
