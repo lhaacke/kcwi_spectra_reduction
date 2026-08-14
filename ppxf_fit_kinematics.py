@@ -18,7 +18,78 @@ def vac_to_air(lam_vac):
     lam_air = lam_vac / (1.0 + 2.735182e-4 + 131.4182 / lam_vac**2 + 2.76249e8 / lam_vac**4)
     return lam_air
 
-def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cut_spec=False, fit=False, bootstrap=False, smoothed_spec='', mask_skylines=False, plot_results=False):
+def bootstrap_spectrum(wavelengths, intensities, resample_fraction=0.1):
+    """
+    Perform a partial bootstrap resampling of a spectrum.
+
+    Parameters:
+    wavelengths (array-like): The original wavelength values.
+    intensities (array-like): The original intensity values.
+    resample_fraction (float, optional): Fraction of data to resample (default: 0.1, or 10%).
+
+    Returns:
+    tuple: New wavelengths and intensities with a subset resampled.
+    """
+    if not (0 <= resample_fraction <= 1):
+        raise ValueError("resample_fraction must be between 0 and 1")
+
+    n_resample = int(len(wavelengths) * resample_fraction)  # Number of points to resample
+    n_keep = len(wavelengths) - n_resample  # Number of points to keep
+
+    # Select indices to keep
+    keep_indices = np.random.choice(len(wavelengths), size=n_keep, replace=False)
+    
+    # Select indices to resample
+    resample_indices = np.random.choice(len(wavelengths), size=n_resample, replace=True)
+
+    # Combine the kept and resampled data
+    indices = np.concatenate((keep_indices, resample_indices))
+    
+    return wavelengths[indices], intensities[indices]
+
+def get_nmad_uncertainties(spec, npix):
+    """
+    Estimate the uncertainties in a spectrum using the Normalized Median Absolute Deviation (NMAD).
+
+    Parameters:
+    spec (array-like): The spectrum to estimate uncertainties for.
+    npix (int): The number of pixels to use for the NMAD estimation.
+
+    Returns:
+    array-like: The uncertainties for each pixel in the spectrum.
+    """
+    print('getting nmad uncertainties')
+    # 50-100 pixels
+    # plus save median/mean spectrum
+    mask = np.zeros_like(spec, dtype=bool) # creates an array that is by default all False
+    nmad_spec = np.zeros_like(spec) # creates an array that is by default all zeros
+    for i, _ in enumerate(spec):
+        start, end = max(0, i - npix // 2), min(len(spec), i + npix // 2)
+        mask[start:end] = True
+        spec_window = spec[mask] # select unmasked pixel for median
+        med = np.nanmean(spec_window)
+        mad = np.nanmedian(np.abs(spec_window - med))
+        nmad = 1.4826 * mad # 1.4826 simulates standard deviation
+        nmad_spec[i] = nmad
+    return nmad_spec
+
+def resample_spectrum(spec, uncertainties):
+    """
+    Resample a spectrum with uncertainties using a normal distribution.
+
+    Parameters:
+    spec (array-like): The spectrum to resample.
+    uncertainties (array-like): The uncertainties for each pixel in the spectrum.
+
+    Returns:
+    array-like: The resampled spectrum.
+    """
+    print('resampling spectrum')
+    resampled_spec = np.random.normal(loc=spec, scale=uncertainties)
+    return resampled_spec
+
+def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cut_spec=False, fit=False,
+                  bootstrap=False, referee_bootstrap=False, smoothed_spec='', mask_skylines=False, plot_results=False):
     '''
     currently working for KCWI spectra (and specifically for swinburne or yale observed of NGC5846_UDG1)
     spectrum: fits file with spectrum to fit
@@ -215,6 +286,51 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
             # fill array with results
             res[i] = (deg, mdeg, vtot, errors[0], redshift_best, redshift_err, pp.sol[1], errors[1], sn_median, sn_average)
             i += 1
+    elif referee_bootstrap:
+        print('entering referee bootstrap')
+        deg = degrees[0]
+        mdeg = degrees[1]
+        res = np.recarray(shape = (1000,), # array to store the result for each degree combination in
+                dtype = [('deg', int), ('mdeg', int), ('v', float), ('v_err', float), ('z', float), ('z_err', float), ('sig', float),
+                        ('sig_err', float), ('sn_median', float), ('sn_average', float)]) # one for deg, mdeg, v, v_err, redshift, redshift_error, S/N
+        # create uncertainty spectrum
+        dgalaxy = get_nmad_uncertainties(galaxy, 100)
+        for i in range(1000):
+            # first attempt of random bootstrapping, feb 2025, goes very wild
+            # _, shuffled_galaxy = bootstrap_spectrum(galaxy, ln_lam1, resample_fraction=0.1)
+
+            # second attempt of bootstrapping, random adding the residual to the galaxy, see Mueller+2020
+            # goes wild for some GCs, but not all
+            # pp_normal = ppxf(templates, galaxy, noise, velscale, start, goodpixels=goodPixels,
+            #         moments=2, degree=deg, mdegree=mdeg, plot=False,
+            #         lam=np.exp(ln_lam1), lam_temp=np.exp(ln_lam2),
+            #         velscale_ratio=velscale_ratio)
+            # print(type(galaxy))
+            # resid = pp_normal.galaxy - pp_normal.bestfit
+            # print('passing res')
+            # resid = resid * np.random.choice([-1, 1], size=resid.shape)
+            # galaxy_strapped = galaxy + resid
+            # print('passing galaxy strapped')
+            # print(type(galaxy_strapped))
+
+            # third attempt at error verification, estimating spectrum uncertainty through NMAD
+            galaxy_resampled = resample_spectrum(galaxy, dgalaxy)
+            pp = ppxf(templates, galaxy_resampled, noise, velscale, start, goodpixels=goodPixels,
+                    moments=2, degree=deg, mdegree=mdeg, plot=False,
+                    lam=np.exp(ln_lam1), lam_temp=np.exp(ln_lam2),
+                    velscale_ratio=velscale_ratio)
+            vcosm = c*np.log(1 + z)  # This is the initial redshift estimate
+            vpec = pp.sol[0]          # This is the fitted residual velocity
+            vtot = vcosm + vpec       # I add the two velocities before computing z
+            print('vcosm: {}, vpec: {}, vtot: {}'.format(vcosm, vpec, vtot))
+
+            redshift_best = np.exp(vtot/c) - 1          # eq.(8) Cappellari (2017)
+            errors = pp.error*np.sqrt(pp.chi2)          # Assume the fit is good
+            redshift_err = np.exp(vtot/c)*errors[0]/c   # Error propagation
+            sn_median = np.median(np.sqrt(((pp.bestfit-pp.apoly)/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio median
+            sn_average = np.average(np.sqrt(((pp.bestfit-pp.apoly)/(pp.galaxy - pp.bestfit))**2)) # signal to noise ratio average
+            # fill array with results
+            res[i] = tuple(map(float, [deg, mdeg, vtot, errors[0].item(), redshift_best, redshift_err, pp.sol[1].item(), errors[1].item(), sn_median, sn_average]))
     else:
         pp = ppxf(templates, galaxy, noise, velscale, start, goodpixels=goodPixels,
                   plot=False, moments=2, degree=4, mdegree=4,
@@ -254,6 +370,11 @@ def fit_vel_sigma(spectrum, save_as, z, grating, degrees=(), shift_spec=True, cu
                 f.write(str(line))
                 f.write('\n')
     elif bootstrap:
+        with open(save_as, 'a') as f:
+            for line in res:
+                f.write(str(line))
+                f.write('\n')
+    elif referee_bootstrap:
         with open(save_as, 'a') as f:
             for line in res:
                 f.write(str(line))
